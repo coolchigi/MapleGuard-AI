@@ -1,0 +1,17 @@
+{
+  "_comment": "Oracle cases. expected_total is the score from IRCC's official 'Check your score' tool (canada.ca). Language fields are [speaking, listening, reading, writing] CLB.",
+  "cases": [
+    {
+      "name": "carleton-grad-474",
+      "note": "Single, age 23, Canadian bachelor's (Carleton), CLB 10+ all abilities, 1 year Canadian work, no second language. Canadian post-secondary education adds 30 additional points. Confirmed 474 on the official IRCC tool 2026-08-21.",
+      "expected_total": 474,
+      "profile": {
+        "age": 23,
+        "education": "bachelors-or-three-year",
+        "first_language": [12, 11, 11, 12],
+        "canadian_work_years": 1,
+        "canadian_post_secondary_years": 4
+      }
+    }
+  ]
+}
