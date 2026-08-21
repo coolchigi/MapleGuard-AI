@@ -20,7 +20,8 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [x] **Date-parameterize** — `crs(profile, as_of)` derives age from DOB; static `age` still works.
 - [x] **`trajectory` + `deadlines`** (`crs/timeline.py`) — age-bracket drops + test expiry (2-yr validity, language points and their transfer drop to 0 on lapse), with dated cliffs and deltas. TODO later: upward Canadian-work anniversaries (needs a work-start date).
 - [ ] **`reachable_paths(profile, live_cutoffs)`** — which federal general / 10 category / BC PNP draws clear now + ranked shortest feasible move. The interpretation layer, feeds the dashboard.
-- [ ] **`sirs_bc(profile)`** — BC SIRS 200-pt grid (wage 55, work 40, edu 40, language 30, location 25), +600-CRS nomination effect, `job_offer_required` flag. First province.
+- [x] **`sirs_bc(profile, offer)`** (`pnp/bc.py`) — BC SIRS 200-pt structure (work 40, edu 40, language 40, wage 55, area 25 = 120 human + 80 economic), +600-CRS nomination constant, `job_offer_required` + `eligible_to_register` flags, Tech-exempt handling. Structure/caps/flags tested.
+  - [ ] **Verify SIRS bands** against the official BC PNP Program Guide (currently `verified=False`, xfail marker in place). Exact sub-scores not trustworthy until done.
 
 ## Feature 2 — NOC reference-letter pre-audit (the moat) — `noc/`
 - [x] **NOC data model** — 2021 lead statement + main duties, seeded verbatim with source/version (NOC 21234 done, verified). `"May..."` duties optional.
