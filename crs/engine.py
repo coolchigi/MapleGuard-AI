@@ -8,6 +8,7 @@ the golden oracle (crs/cases/golden.json).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 
 from . import tables as T
 from .models import LanguageScores, Profile
@@ -72,7 +73,7 @@ def _max_clb(scores: LanguageScores) -> int:
 
 
 # ------------------------------------------------------------------- the blocks
-def _core(profile: Profile, spouse: bool) -> list[LineItem]:
+def _core(profile: Profile, spouse: bool, age: int) -> list[LineItem]:
     age_t = T.AGE_SPOUSE if spouse else T.AGE_SINGLE
     edu_t = T.EDUCATION_SPOUSE if spouse else T.EDUCATION_SINGLE
     first_t = T.FIRST_LANG_SPOUSE if spouse else T.FIRST_LANG_SINGLE
@@ -80,7 +81,7 @@ def _core(profile: Profile, spouse: bool) -> list[LineItem]:
     second_cap = T.SECOND_LANG_CAP_SPOUSE if spouse else T.SECOND_LANG_CAP_SINGLE
 
     items = [
-        LineItem("age", age_t.values.get(profile.age, 0)),
+        LineItem("age", age_t.values.get(age, 0)),
         LineItem("education", edu_t.values[profile.education]),
         LineItem("first_language", _lang_points(profile.first_language, first_t.values)),
         LineItem(
@@ -166,10 +167,11 @@ def _additional(profile: Profile) -> list[LineItem]:
     return items
 
 
-def crs(profile: Profile) -> Score:
+def crs(profile: Profile, as_of: date | None = None) -> Score:
     spouse_scored = profile.scored_with_spouse()
+    age = profile.age_at(as_of)
 
-    core_items = _core(profile, spouse_scored)
+    core_items = _core(profile, spouse_scored, age)
     spouse_items = _spouse(profile)
     transfer_items = _skill_transfer(profile)
     additional_items = _additional(profile)

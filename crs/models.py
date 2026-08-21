@@ -6,6 +6,7 @@ Language scores are Canadian Language Benchmark (CLB) levels per ability, 0-10+.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Literal, Optional
 
 MaritalStatus = Literal["single", "married", "common-law", "divorced", "widowed", "separated"]
@@ -35,9 +36,11 @@ class LanguageScores:
 
 @dataclass
 class Profile:
-    age: int
     education: EducationLevel
     first_language: LanguageScores
+    # Supply exactly one of `age` (static) or `date_of_birth` (date-parameterized).
+    age: Optional[int] = None
+    date_of_birth: Optional[date] = None
     marital_status: MaritalStatus = "single"
 
     # Spouse is only scored when they accompany you AND are not a Canadian citizen/PR.
@@ -59,6 +62,18 @@ class Profile:
     # French additional-points eligibility is derived, but we let the caller state
     # whether the second language is French (NCLC) for the +25/+50 additional bonus.
     second_language_is_french: bool = False
+
+    def __post_init__(self):
+        if self.age is None and self.date_of_birth is None:
+            raise ValueError("Profile needs either `age` or `date_of_birth`")
+
+    def age_at(self, as_of: Optional[date] = None) -> int:
+        """Effective age. Prefers date_of_birth (as of `as_of`, default today) over static `age`."""
+        if self.date_of_birth is not None:
+            d = as_of or date.today()
+            dob = self.date_of_birth
+            return d.year - dob.year - ((d.month, d.day) < (dob.month, dob.day))
+        return self.age
 
     def scored_with_spouse(self) -> bool:
         """You are scored as having a spouse only if they come with you and are not a PR/citizen."""

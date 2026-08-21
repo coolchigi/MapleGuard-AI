@@ -126,3 +126,25 @@ def _profile_from_case(d: dict) -> Profile:
         if isinstance(d.get(lang_key), list):
             d[lang_key] = LanguageScores(*d[lang_key])
     return Profile(**d)
+
+
+# --- Date-parameterization (time-machine foundation) ---------------------------
+from datetime import date as _date
+
+
+def test_dob_derives_age_and_age_cliff():
+    p = Profile(education="bachelors-or-three-year", first_language=L(9),
+                date_of_birth=_date(1994, 11, 3))
+    assert crs(p, _date(2024, 11, 2)).breakdown[0].points == 110  # age 29
+    assert crs(p, _date(2024, 11, 3)).breakdown[0].points == 105  # turns 30
+
+
+def test_static_age_still_works():
+    assert crs(Profile(age=29, education="bachelors-or-three-year",
+                       first_language=L(9))).breakdown[0].points == 110
+
+
+def test_requires_age_or_dob():
+    import pytest as _pt
+    with _pt.raises(ValueError):
+        Profile(education="secondary", first_language=L(0))
