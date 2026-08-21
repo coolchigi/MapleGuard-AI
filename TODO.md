@@ -17,8 +17,8 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [x] **Provenance gate** — every table `verified=True`; `test_table_provenance` green.
 - [x] **Golden oracle** — owner's real profile confirmed 474 on the official IRCC tool.
 - [ ] **More oracle cases** — reconstruct the ImmiPilot 444 profile, get its official number, lock it as a test (find which factor incumbents break). [needs inputs]
-- [ ] **Date-parameterize** — `crs(profile, as_of)` deriving age from DOB, so the same engine powers today + the trajectory. (Current model uses `age:int`; add DOB without breaking the API.)
-- [ ] **`trajectory(profile, from, to)` + `deadlines(profile)`** — age-bracket drops, test expiry (2-yr validity, profile rejected on lapse), Canadian-work anniversaries → the time machine's cliffs/windows. Reuses the engine, no new data source.
+- [x] **Date-parameterize** — `crs(profile, as_of)` derives age from DOB; static `age` still works.
+- [x] **`trajectory` + `deadlines`** (`crs/timeline.py`) — age-bracket drops + test expiry (2-yr validity, language points and their transfer drop to 0 on lapse), with dated cliffs and deltas. TODO later: upward Canadian-work anniversaries (needs a work-start date).
 - [ ] **`reachable_paths(profile, live_cutoffs)`** — which federal general / 10 category / BC PNP draws clear now + ranked shortest feasible move. The interpretation layer, feeds the dashboard.
 - [ ] **`sirs_bc(profile)`** — BC SIRS 200-pt grid (wage 55, work 40, edu 40, language 30, location 25), +600-CRS nomination effect, `job_offer_required` flag. First province.
 

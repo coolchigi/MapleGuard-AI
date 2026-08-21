@@ -51,6 +51,7 @@ class Profile:
     spouse_canadian_work_years: int = 0
 
     second_language: Optional[LanguageScores] = None  # e.g. French as second language
+    first_language_test_date: Optional[date] = None    # results valid 2 years (for expiry)
     canadian_work_years: int = 0
     foreign_work_years: int = 0
 
