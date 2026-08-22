@@ -4,7 +4,7 @@ Single source of truth for what is done and what is outstanding. Update as you g
 Spec: `../concept-spec-mapleguard.md` · Why/value: `../why-mapleguard.md`.
 Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q`
 
-**Status 2026-08-21:** 18 tests green (11 CRS + 7 NOC). CRS engine complete and validated against IRCC's official tool (golden oracle 474). NOC audit core done bar the LLM matcher. Nothing deployed yet.
+**Status 2026-08-22:** 40 tests green + 1 xfail (CRS + timeline + SIRS + NOC + reachable-paths). CRS engine validated against IRCC's official tool (golden oracle 474). Deterministic core now complete end to end: `crs` → `trajectory`/`deadlines` → `sirs_bc` → `reachable_paths` (the interpretation layer). NOC audit core done bar the LLM matcher. Nothing deployed yet.
 
 > Note: the CRS `engine.py`/`tables.py` were rebuilt on 2026-08-21 after an accidental overwrite; the rebuild passes every prior test including the 474 oracle and the skill-transfer anchors, so it is functionally the restored engine.
 
@@ -19,7 +19,7 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [ ] **More oracle cases** — reconstruct the ImmiPilot 444 profile, get its official number, lock it as a test (find which factor incumbents break). [needs inputs]
 - [x] **Date-parameterize** — `crs(profile, as_of)` derives age from DOB; static `age` still works.
 - [x] **`trajectory` + `deadlines`** (`crs/timeline.py`) — age-bracket drops + test expiry (2-yr validity, language points and their transfer drop to 0 on lapse), with dated cliffs and deltas. TODO later: upward Canadian-work anniversaries (needs a work-start date).
-- [ ] **`reachable_paths(profile, live_cutoffs)`** — which federal general / 10 category / BC PNP draws clear now + ranked shortest feasible move. The interpretation layer, feeds the dashboard.
+- [x] **`reachable_paths(profile, draws, as_of, bc_offer)`** (`paths/reach.py`) — classifies each live draw into reachable / within-reach / blocked / needs-NOC-check, with a ranked single-move catalog (language→CLB9/10, add French NCLC7, +1 Canadian year, +600 nomination) recomputed via the CRS engine. French-category eligibility derived; occupation categories honest-unknown unless caller-asserted; BC PNP scored via `sirs_bc` with the job-offer flag + 600 bonus surfaced. 8 tests.
 - [x] **`sirs_bc(profile, offer)`** (`pnp/bc.py`) — BC SIRS 200-pt structure (work 40, edu 40, language 40, wage 55, area 25 = 120 human + 80 economic), +600-CRS nomination constant, `job_offer_required` + `eligible_to_register` flags, Tech-exempt handling. Structure/caps/flags tested.
   - [ ] **Verify SIRS bands** against the official BC PNP Program Guide (currently `verified=False`, xfail marker in place). Exact sub-scores not trustworthy until done.
 
