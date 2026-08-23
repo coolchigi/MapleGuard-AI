@@ -28,7 +28,7 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [x] **Mandatory-elements check** — deterministic PRESENT/MISSING/NEEDS_MANUAL_CHECK, conservative (MISSING only on confirmed absence).
 - [x] **Duty-match scorer** — coverage vs required duties, 80% pass/fail, each gap cited; alignment validated so coverage can't be fabricated.
 - [x] **LLM duty matcher** — `LLMDutyMatcher` (`noc/matcher.py`) wired to Claude (default `claude-opus-5`), lazy client so import/construct needs no key or network. Returns verbatim-quote alignment; paraphrase/fabrication dropped by `validate_alignment`. 8 tests with a fake client + 1 skipif live integration test.
-- [ ] **Correction draft** — generate a revised letter matching the lead statement for the employer to sign. Never asserts eligibility.
+- [x] **Correction draft** — `LetterCorrector` (`noc/draft.py`) rewrites a gapped letter to align with the lead statement + cover flagged duties, for the employer to sign. Never asserts eligibility, never invents work: covers a duty only from the original letter or caller-supplied supporting facts, else leaves an `[employer to confirm: <duty>]` placeholder. Re-auditable: round-trip test drafts then re-runs `audit_letter` and sees supported gaps close while unsupported ones stay cited. 7 tests (fake client + substring matcher) + 1 skipif live test.
 - [ ] **Add target NOCs** — seed the codes relevant to BC Tech candidates (dev/software NOCs) the same verbatim way.
 
 ## Feature 1 — Research / ingestion agent
