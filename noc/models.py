@@ -90,6 +90,11 @@ class AuditReport:
     noc_code: str
     elements: List[ElementResult]
     duties: DutyCoverageResult
+    # Stamped when the occupation's NOC text has not been line-verified against the official
+    # source (NocOccupation.verified is False). The audit still computes, but this flag says
+    # the result rests on unverified reference text and must not be treated as trustworthy.
+    needs_verification: bool = False
+    verification_note: str = ""
 
     @property
     def elements_missing(self) -> List[str]:
@@ -98,6 +103,8 @@ class AuditReport:
     def to_dict(self) -> dict:
         return {
             "noc_code": self.noc_code,
+            "needs_verification": self.needs_verification,
+            "verification_note": self.verification_note,
             "elements": [{"name": e.name, "status": e.status.value, "evidence": e.evidence}
                          for e in self.elements],
             "duties": {

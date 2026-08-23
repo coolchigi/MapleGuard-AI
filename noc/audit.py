@@ -59,9 +59,20 @@ def score_duties(occupation: NocOccupation, alignment: Alignment, lead_statement
 
 def audit_letter(letter_text: str, occupation: NocOccupation, matcher: DutyMatcher,
                  threshold: float = DEFAULT_THRESHOLD) -> AuditReport:
-    """Run the full audit: required elements plus duty coverage against the occupation."""
+    """Run the full audit: required elements plus duty coverage against the occupation.
+
+    If the occupation's NOC text has not been line-verified against the official source
+    (``verified=False``), the report is stamped ``needs_verification``: it still computes,
+    but the caller is told, deterministically, that the result rests on unverified reference
+    text and must not be trusted as a line-checked audit.
+    """
     elements = check_mandatory_elements(letter_text)
     raw_alignment, lead_evidence = matcher(letter_text, occupation)
     alignment, lead_covered = validate_alignment(letter_text, raw_alignment, lead_evidence)
     duties = score_duties(occupation, alignment, lead_covered, threshold)
-    return AuditReport(noc_code=occupation.code, elements=elements, duties=duties)
+    needs_verification = not occupation.verified
+    note = (f"NOC {occupation.code} reference text is not line-verified against the official "
+            f"source ({occupation.source}); this audit is not a trustworthy result until it is."
+            if needs_verification else "")
+    return AuditReport(noc_code=occupation.code, elements=elements, duties=duties,
+                       needs_verification=needs_verification, verification_note=note)

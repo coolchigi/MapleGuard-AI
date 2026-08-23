@@ -8,7 +8,9 @@ Run:  cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 """
 import pytest
 
-from noc import OCCUPATIONS, get_occupation
+from noc import OCCUPATIONS, get_occupation, audit_letter
+
+_EMPTY_MATCHER = lambda letter_text, occupation: ({}, "")
 
 BC_TECH_DEV_NOCS = ["21234", "21231", "21232", "21230"]
 
@@ -50,3 +52,22 @@ def test_newly_seeded_nocs_flagged_unverified():
     assert get_occupation("21234").verified is True   # the original, verified verbatim
     for code in ["21231", "21232", "21230"]:
         assert get_occupation(code).verified is False
+
+
+# --- NEEDS_VERIFICATION guard on the audit ------------------------------------------
+def test_audit_of_verified_occupation_is_not_flagged():
+    report = audit_letter("Some letter text.", get_occupation("21234"), _EMPTY_MATCHER)
+    assert report.needs_verification is False
+    assert report.verification_note == ""
+    assert report.to_dict()["needs_verification"] is False
+
+
+def test_audit_of_unverified_occupation_is_loudly_flagged():
+    occ = get_occupation("21231")  # seeded verbatim but not yet line-verified
+    report = audit_letter("Some letter text.", occ, _EMPTY_MATCHER)
+    assert report.needs_verification is True
+    assert "21231" in report.verification_note and occ.source in report.verification_note
+    data = report.to_dict()
+    assert data["needs_verification"] is True
+    assert data["verification_note"]  # non-empty reason travels with the serialized report
+
