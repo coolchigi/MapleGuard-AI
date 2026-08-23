@@ -27,7 +27,7 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [x] **NOC data model** — 2021 lead statement + main duties, seeded verbatim with source/version (NOC 21234 done, verified). `"May..."` duties optional.
 - [x] **Mandatory-elements check** — deterministic PRESENT/MISSING/NEEDS_MANUAL_CHECK, conservative (MISSING only on confirmed absence).
 - [x] **Duty-match scorer** — coverage vs required duties, 80% pass/fail, each gap cited; alignment validated so coverage can't be fabricated.
-- [ ] **LLM duty matcher** — the real `DutyMatcher` producing the alignment (interface defined + stub-tested). Wire to a model, keep output validated.
+- [x] **LLM duty matcher** — `LLMDutyMatcher` (`noc/matcher.py`) wired to Claude (default `claude-opus-5`), lazy client so import/construct needs no key or network. Returns verbatim-quote alignment; paraphrase/fabrication dropped by `validate_alignment`. 8 tests with a fake client + 1 skipif live integration test.
 - [ ] **Correction draft** — generate a revised letter matching the lead statement for the employer to sign. Never asserts eligibility.
 - [ ] **Add target NOCs** — seed the codes relevant to BC Tech candidates (dev/software NOCs) the same verbatim way.
 
