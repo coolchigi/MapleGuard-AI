@@ -4,7 +4,7 @@ Single source of truth for what is done and what is outstanding. Update as you g
 Spec: `../concept-spec-mapleguard.md` · Why/value: `../why-mapleguard.md`.
 Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q`
 
-**Status 2026-08-22:** 40 tests green + 1 xfail (CRS + timeline + SIRS + NOC + reachable-paths). CRS engine validated against IRCC's official tool (golden oracle 474). Deterministic core now complete end to end: `crs` → `trajectory`/`deadlines` → `sirs_bc` → `reachable_paths` (the interpretation layer). NOC audit core done bar the LLM matcher. Nothing deployed yet.
+**Status 2026-08-22:** 66 passed, 2 skipped (live LLM), 1 xfail. CRS engine validated against IRCC's official tool (golden oracle 474). Deterministic core complete end to end: `crs` → `trajectory`/`deadlines` → `sirs_bc` → `reachable_paths`. **NOC feature complete**: LLM duty matcher, correction-draft generator, first three BC Tech NOCs, and the NEEDS_VERIFICATION guard, all merged to main. **Frontend designed** (not built): the position panel + time machine are locked in a Claude Design canvas (editorial + passport style, cited show-your-work breakdown, −149 test-expiry cliff) — artifact https://claude.ai/code/artifact/458b1662-5d86-40d7-bd26-f33068094f29. Nothing deployed yet.
 
 > Note: the CRS `engine.py`/`tables.py` were rebuilt on 2026-08-21 after an accidental overwrite; the rebuild passes every prior test including the 474 oracle and the skill-transfer anchors, so it is functionally the restored engine.
 
@@ -50,8 +50,9 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [ ] Scheduled BC PNP draw watch → `sirs_bc` score → cutoff match + job-offer flag → alert. (Lean on Tech pathway job-offer-exempt occupations.)
 
 ## Frontend (dashboard = proof surface) — Next.js on Vercel
-- [ ] Position panel (CRS + "why this number" breakdown).
-- [ ] **Time machine** (scrubbable trajectory, cliffs/windows) — the novelty spark.
+> Design locked in Claude Design (editorial + passport style, on real engine output): position panel + time machine. Working files in `../design/` (`Main.dc.html`, `TimeMachine.dc.html`, `canvas.json`). Artifact: https://claude.ai/code/artifact/458b1662-5d86-40d7-bd26-f33068094f29. The Next.js build below is still outstanding.
+- [x] Position panel — designed (CRS + cited "why this number" breakdown, IRCC category caps sourced). [ ] build in Next.js.
+- [x] **Time machine** — designed (step-chart trajectory + dated cliffs, −149 test-expiry hero). [ ] build in Next.js (make the scrubber interactive).
 - [ ] What-if sliders (deterministic recompute).
 - [ ] NOC audit view (duty-by-duty diff + drafted correction).
 - [ ] Cited change-log / inbox.
