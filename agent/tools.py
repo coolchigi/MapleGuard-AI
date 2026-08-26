@@ -44,10 +44,13 @@ from .schemas import BCJobOfferInput, DrawInput, ProfileInput
 # --------------------------------------------------------- injected model clients
 @dataclass
 class ToolDeps:
-    """Model-backed dependencies for the two generative tools. Defaults construct the real
-    Claude-backed clients lazily (no key or network until first call); tests inject fakes."""
+    """Model-backed dependencies for the two generative tools, plus the optional cited
+    corpus. Defaults construct the real Claude-backed clients lazily (no key or network until
+    first call); tests inject fakes. `corpus` is a memory store (TestMemoryStore in dev, a
+    Bedrock KB in deploy); when set, audit citations are re-sourced from live retrieval."""
     matcher: Any = None       # noc.audit.DutyMatcher — proposes duty->sentence alignment
     corrector: Any = None     # noc.draft.LetterCorrector — drafts the corrected letter
+    corpus: Any = None        # memory store for citation retrieval; None = seed citations
 
     def get_matcher(self):
         if self.matcher is None:
@@ -66,10 +69,11 @@ class ToolDeps:
 _DEPS = ToolDeps()
 
 
-def configure_deps(matcher: Any = None, corrector: Any = None) -> ToolDeps:
-    """Point the model-backed tools at specific clients (orchestrator wiring / tests)."""
+def configure_deps(matcher: Any = None, corrector: Any = None, corpus: Any = None) -> ToolDeps:
+    """Point the model-backed tools at specific clients and the citation corpus (orchestrator
+    wiring / tests)."""
     global _DEPS
-    _DEPS = ToolDeps(matcher=matcher, corrector=corrector)
+    _DEPS = ToolDeps(matcher=matcher, corrector=corrector, corpus=corpus)
     return _DEPS
 
 
@@ -215,7 +219,11 @@ def audit_reference_letter(letter_text: str, noc_code: str) -> dict:
     """
     occupation = get_occupation(noc_code)
     report = audit_letter(letter_text, occupation, _DEPS.get_matcher())
-    return report.to_dict()
+    out = report.to_dict()
+    if _DEPS.corpus is not None:
+        from .citations import cite_gaps_from_corpus
+        out = cite_gaps_from_corpus(out, _DEPS.corpus)
+    return out
 
 
 @tool

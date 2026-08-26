@@ -13,6 +13,7 @@ Public surface:
   build_app           wrap the handler in a Bedrock AgentCore app for deployment
   never_submit, never_assert_eligibility, GateDecision   the policy gates
 """
+from .citations import cite_gaps_from_corpus, retrieve_citation
 from .config import Deployment, build_memory, build_session_manager
 from .gates import GateDecision, forbidden_tools, never_assert_eligibility, never_submit
 from .memory import build_kb_memory, build_test_memory, noc_seed_passages
@@ -31,6 +32,8 @@ __all__ = [
     "build_test_memory",
     "build_kb_memory",
     "noc_seed_passages",
+    "cite_gaps_from_corpus",
+    "retrieve_citation",
     "Deployment",
     "build_memory",
     "build_session_manager",

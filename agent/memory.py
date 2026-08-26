@@ -59,27 +59,57 @@ def noc_seed_passages(occupations: Optional[dict[str, NocOccupation]] = None
 
 
 # ------------------------------------------------------------------- async wrappers
+def _run_async(coro):
+    """Run a coroutine to completion from sync code, safely whether or not an event loop is
+    already running. Strands runs sync tools in a worker thread (no running loop there, so
+    `asyncio.run` is fine), but if this is ever reached inside a running loop we fall back to
+    a dedicated thread rather than raise."""
+    import asyncio
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    import threading
+    box: dict[str, Any] = {}
+
+    def _worker() -> None:
+        box["value"] = asyncio.run(coro)
+
+    t = threading.Thread(target=_worker)
+    t.start()
+    t.join()
+    return box["value"]
+
+
 def seed_store(store: Any, passages: list[tuple[str, dict]]) -> int:
     """Add passages to a writable store. Sync wrapper over the async `store.add`. Returns the
     number added."""
-    import asyncio
 
     async def _add_all() -> int:
         for content, meta in passages:
             await store.add(content, meta)
         return len(passages)
 
-    return asyncio.run(_add_all())
+    return _run_async(_add_all())
 
 
 def search_sync(store: Any, query: str, max_results: int = 3) -> list:
-    """Query a store synchronously (for tests / seeding checks). Returns MemoryEntry list;
-    each entry's `.metadata` carries the passage's `source` (and `_relevanceScore`, plus
-    `_sourceLocation` from a real KB) — the citation surface."""
-    import asyncio
-    from strands.memory.types import SearchOptions
+    """Query a store synchronously (for tests, seeding checks, and the citation resolver).
+    Returns MemoryEntry list; each entry's `.metadata` carries the passage's `source` (and
+    `_relevanceScore`, plus `_sourceLocation` from a real KB) — the citation surface.
 
-    return asyncio.run(store.search(query, SearchOptions(max_search_results=max_results)))
+    The options object is Strands' `SearchOptions` when the SDK is present; without it (a fake
+    store in an offline test) a plain dict of the same shape is passed, so the citation
+    resolver is exercisable with no SDK."""
+    try:
+        from strands.memory.types import SearchOptions
+        options: Any = SearchOptions(max_search_results=max_results)
+    except ImportError:  # pragma: no cover - only when Strands is absent
+        options = {"max_search_results": max_results}
+
+    return _run_async(store.search(query, options))
 
 
 # ----------------------------------------------------------------------- dev backend

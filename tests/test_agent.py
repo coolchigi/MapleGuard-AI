@@ -431,6 +431,99 @@ def test_dev_orchestrator_persists_conversation_and_profile_state(tmp_path):
     assert len(reloaded.messages) > 0
 
 
+# --- 6. NOC audit cites from the retrieved corpus (live retrieval, offline) -----------
+AUDIT_LETTER = ("This confirms Jane Doe worked as a Web Developer at Acme. She works 37.5 "
+                "hours per week at $85,000 per year. Monitor and maintain website "
+                "functionality. Sincerely, John Manager.")
+
+
+def _audit_matcher(letter_text, occupation):
+    # Covers only one duty, so the rest are flagged as cited gaps.
+    return ({"21234.4": "Monitor and maintain website functionality."}, "worked as a Web Developer")
+
+
+class _FakeEntry:
+    def __init__(self, content, metadata):
+        self.content = content
+        self.metadata = metadata
+
+
+class _FakeStore:
+    """A minimal async store standing in for a memory store, so the citation resolver is
+    testable with no SDK. Returns any seeded entry whose content contains a query word."""
+    def __init__(self, entries):
+        self._entries = entries
+
+    async def search(self, query, options=None):
+        words = set(query.lower().split())
+        return [e for e in self._entries
+                if words & set(e.content.lower().split())]
+
+
+def test_citation_resolver_resolves_gap_source_from_corpus_no_sdk():
+    # Pure-Python: fake store carries a NOC 21234 duty passage with a real source.
+    from agent.citations import cite_gaps_from_corpus
+    store = _FakeStore([
+        _FakeEntry("NOC 21234 main duty 21234.1: Develop write modify integrate and test "
+                   "Web site related code",
+                   {"noc_code": "21234", "source": "https://noc.esdc.gc.ca/live-passage",
+                    "_relevanceScore": 5}),
+    ])
+    report = {"duties": {"gaps": [
+        {"noc_code": "21234", "version": "NOC 2021", "source": "hardcoded-string-from-data.py",
+         "text": "Develop, write, modify, integrate and test Web site related code"},
+    ]}}
+    out = cite_gaps_from_corpus(report, store)
+    gap = out["duties"]["gaps"][0]
+    assert gap["cited_via"] == "corpus_retrieval"
+    assert gap["source"] == "https://noc.esdc.gc.ca/live-passage"   # re-sourced from retrieval
+    assert gap["source"] != "hardcoded-string-from-data.py"
+    assert out["citations"]["resolved_from"] == "corpus_retrieval"
+
+
+def test_citation_resolver_falls_back_to_seed_on_miss_no_sdk():
+    from agent.citations import cite_gaps_from_corpus
+    report = {"duties": {"gaps": [
+        {"noc_code": "21234", "version": "v", "source": "seed-source", "text": "some duty text"},
+    ]}}
+    out = cite_gaps_from_corpus(report, _FakeStore([]))   # empty corpus -> no hit
+    gap = out["duties"]["gaps"][0]
+    assert gap["cited_via"] == "seed" and gap["source"] == "seed-source"  # never dropped
+    assert out["citations"]["resolved_from"] == "seed"
+
+
+def test_audit_tool_cites_gaps_from_seeded_corpus_end_to_end():
+    pytest.importorskip("strands")
+    from agent.memory import build_test_memory
+    from agent.tools import audit_reference_letter
+    from agent import configure_deps
+    _, store = build_test_memory(seed=True)
+    configure_deps(matcher=_audit_matcher, corpus=store)
+    try:
+        report = audit_reference_letter(AUDIT_LETTER, "21234")
+    finally:
+        configure_deps()
+    assert report["citations"]["resolved_from"] == "corpus_retrieval"
+    assert report["duties"]["gaps"], "expected cited gaps"
+    for gap in report["duties"]["gaps"]:
+        assert gap["cited_via"] == "corpus_retrieval"
+        assert gap["source"].startswith("https://noc.esdc.gc.ca")  # the live-retrieved source
+
+
+def test_audit_tool_without_a_corpus_is_unchanged():
+    # No corpus configured -> deterministic seed citations, no retrieval fields added.
+    from agent.tools import audit_reference_letter
+    from agent import configure_deps
+    configure_deps(matcher=_audit_matcher)  # no corpus
+    try:
+        report = audit_reference_letter(AUDIT_LETTER, "21234")
+    finally:
+        configure_deps()
+    assert "citations" not in report
+    assert all("cited_via" not in g for g in report["duties"]["gaps"])
+    assert all(g["source"] for g in report["duties"]["gaps"])  # seed citation still present
+
+
 # --- Optional live test: only when a Bedrock model + AWS creds are configured ---------
 @pytest.mark.skipif(
     not os.environ.get("MAPLEGUARD_AGENT_INTEGRATION"),

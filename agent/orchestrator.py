@@ -110,7 +110,7 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
                        matcher: Any = None, corrector: Any = None,
                        system_prompt: Optional[str] = None,
                        memory: Any = None, session_manager: Any = None,
-                       state: Any = None):
+                       state: Any = None, corpus: Any = None):
     """Construct the MapleGuard Strands agent.
 
     Args:
@@ -125,6 +125,8 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
         session_manager: A Strands session manager for conversation/state persistence
             (FileSessionManager dev, S3SessionManager deploy). None disables persistence.
         state: Initial per-user state (the profile dict) for `agent.state`.
+        corpus: A memory store for re-sourcing NOC audit citations from live retrieval
+            (the store behind `memory`). None keeps the seeded citations from noc/data.py.
 
     Returns:
         A configured `strands.Agent`. Requires the Strands SDK at call time.
@@ -133,7 +135,7 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
 
     tools = MAPLEGUARD_TOOLS if tools is None else tools
     assert_no_forbidden_tools(tools)
-    configure_deps(matcher=matcher, corrector=corrector)
+    configure_deps(matcher=matcher, corrector=corrector, corpus=corpus)
     gate = make_policy_gate()
     kwargs: dict[str, Any] = {}
     if memory is not None:
@@ -168,6 +170,7 @@ def build_dev_orchestrator(session_id: str, profile: Optional[dict] = None, mode
     return build_orchestrator(
         model=model, matcher=matcher, corrector=corrector,
         memory=mem[0] if mem else None,
+        corpus=mem[1] if mem else None,   # same store, used to re-source audit citations
         session_manager=build_session_manager(session_id, config),
         state={"profile": profile} if profile else None,
     )
