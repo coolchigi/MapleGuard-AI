@@ -32,7 +32,7 @@ Split by determinism: instant local recompute in the browser for the proof surfa
 - Cite every value. Mark unverified data `verified=False` / `needs_manual_check` rather than encoding a guess as fact.
 - Writing (docs, comments, blogs): no em dashes, no semicolons in prose. Specific and honest. No fabricated numbers. No hype buzzwords.
 - Public repo (github.com/coolchigi/MapleGuard-AI): no personal data, no internal competitor strategy.
-- Commit on a branch with the Co-Authored-By trailer; don't merge (the orchestrator session merges).
+- Commit on a branch with the Co-Authored-By trailer; don't merge (the orchestrator session merges). **Follow `docs/session-coordination.md`**: stay in your own worktree + branch, never touch `main`, report {branch, HEAD sha, tests, decisions}.
 
 ## Status
 Done: deterministic core end to end (crs → timeline → sirs_bc → reachable_paths), NOC feature (matcher + corrector + BC Tech NOCs + verification guard), draw ingestion. Building: Strands agent, README + 3 technical blogs. Not started: server API, web app, alerting, AgentCore/Guardrails/DynamoDB deploy. See `TODO.md` for the live tracker.
