@@ -4,7 +4,7 @@ Single source of truth for what is done and what is outstanding. Update as you g
 Spec: `../concept-spec-mapleguard.md` · Why/value: `../why-mapleguard.md`.
 Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q`
 
-**Status 2026-08-22:** 66 passed, 2 skipped (live LLM), 1 xfail. CRS engine validated against IRCC's official tool (golden oracle 474). Deterministic core complete end to end: `crs` → `trajectory`/`deadlines` → `sirs_bc` → `reachable_paths`. **NOC feature complete**: LLM duty matcher, correction-draft generator, first three BC Tech NOCs, and the NEEDS_VERIFICATION guard, all merged to main. **Frontend designed** (not built): the position panel + time machine are locked in a Claude Design canvas (editorial + passport style, cited show-your-work breakdown, −149 test-expiry cliff) — artifact https://claude.ai/code/artifact/458b1662-5d86-40d7-bd26-f33068094f29. Nothing deployed yet.
+**Status 2026-08-22:** 100 passed, 16 skipped (live LLM/AWS), 1 xfail (30 pass with Strands installed). Agent layer live: genuine Strands orchestrator + tools + gates + cited-corpus memory + session storage, all offline-testable, AWS seams marked. Pushed to github.com/coolchigi/MapleGuard-AI. CRS engine validated against IRCC's official tool (golden oracle 474). Deterministic core complete end to end: `crs` → `trajectory`/`deadlines` → `sirs_bc` → `reachable_paths`. **NOC feature complete**: LLM duty matcher, correction-draft generator, first three BC Tech NOCs, and the NEEDS_VERIFICATION guard, all merged to main. **Frontend designed** (not built): the position panel + time machine are locked in a Claude Design canvas (editorial + passport style, cited show-your-work breakdown, −149 test-expiry cliff) — artifact https://claude.ai/code/artifact/458b1662-5d86-40d7-bd26-f33068094f29. Nothing deployed yet.
 
 > Note: the CRS `engine.py`/`tables.py` were rebuilt on 2026-08-21 after an accidental overwrite; the rebuild passes every prior test including the 474 oracle and the skill-transfer anchors, so it is functionally the restored engine.
 
@@ -58,11 +58,13 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [ ] Cited change-log / inbox.
 - [ ] Real-time updates (upload → live dashboard push).
 
-## Safety + wiring
-- [ ] **Strands agent** — single orchestrator + tools (engine, audit, ingestion). Not a swarm.
-- [ ] **AgentCore** — deploy on Runtime; Code Interpreter (math), Memory (profile), Policy/Cedar (two gates: never submit / never assert eligibility), Observability (proof surface).
+## Safety + wiring — `agent/`
+- [x] **Strands agent** — genuine, idiomatic Strands (verified vs SDK 1.53.0), NOT a wrapper. Real `@tool` tools with richly-typed TypedDict schemas over the deterministic core, a real Agent + agentic loop (model chooses/chains, no hardcoded pipeline), never-submit (BeforeToolCall hook) + never-assert gates as real guards. Optional auditor+strategist agent-as-tool team (`agent/team.py`); flat orchestrator is the default.
+- [x] **Cited-corpus memory (dev mirror)** — `MemoryManager` over `TestMemoryStore` (offline), seeded from `noc.OCCUPATIONS` so a retrieved passage carries its real source URL. NOC audit now re-sources each flagged gap's citation from the retrieved passage (`cited_via="corpus_retrieval"`), a live retrieval end to end. Bright line held: reference TEXT only, never a cutoff number into `crs()`/`reachable_paths()`. `BedrockKnowledgeBaseStore` is the real, config-swappable deploy seam.
+- [x] **Session/state storage (dev mirror)** — `FileSessionManager` + profile in `agent.state`, restores a conversation by session id. `S3SessionManager` is the one-line deploy swap. Config flips memory (dev|bedrock_kb) + sessions (file|s3) by env var; defaults fully offline.
+- [~] **AgentCore** — authentic, clearly-marked `BedrockAgentCoreApp` entrypoint (`agent/runtime.py`); Code Interpreter (math as visible proof surface), Memory, Observability NOT wired yet. Docs-only surfaces (`bedrock_agentcore` clients, `strands_tools.retrieve`) must be API-verified before wiring. **Provisioning is a pre-demo step** (needs live AWS): see `docs/strands-plan.md` "what the user must provision".
 - [ ] **Bedrock Guardrails** — PII masking (UCI, passport, DOB) on all inbound/outbound + denied-topic "never assert eligibility."
-- [ ] **DynamoDB** profile + snapshot store.
+- [ ] **DynamoDB** profile + snapshot store (or S3/KB per the storage plan).
 
 ## Nice-to-haves (after the core is excellent — priority order)
 - [ ] Email onboarding + intake (SES → Lambda PDF extract → Guardrails → profile → live update).
