@@ -1,9 +1,17 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
 .pytest_cache/
 .venv/
 venv/
-.env
-.env.local
-._*
+
+# macOS
 .DS_Store
+._*
+
+# Local agent worktrees / session state
+.claude/
+
+# Secrets
+.env

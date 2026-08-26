@@ -15,7 +15,7 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [x] **Skill transferability** — 3 groups, each two components capped 50, overall 100, graduated 13/25/50 by tier + CLB7/CLB9 threshold. Lone-bachelor over-count trap handled. Anchored by tests.
 - [x] **Additional points** — PNP +600, sibling +15, Canadian study +15/+30, French bonus +25/+50, arranged-employment pinned 0 (removed 2025-03-25).
 - [x] **Provenance gate** — every table `verified=True`; `test_table_provenance` green.
-- [x] **Golden oracle** — owner's real profile confirmed 474 on the official IRCC tool.
+- [x] **Golden oracle** — a Canadian-bachelor profile confirmed 474 on the official IRCC tool.
 - [ ] **More oracle cases** — reconstruct the ImmiPilot 444 profile, get its official number, lock it as a test (find which factor incumbents break). [needs inputs]
 - [x] **Date-parameterize** — `crs(profile, as_of)` derives age from DOB; static `age` still works.
 - [x] **`trajectory` + `deadlines`** (`crs/timeline.py`) — age-bracket drops + test expiry (2-yr validity, language points and their transfer drop to 0 on lapse), with dated cliffs and deltas. TODO later: upward Canadian-work anniversaries (needs a work-start date).
