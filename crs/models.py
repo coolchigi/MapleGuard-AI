@@ -64,6 +64,11 @@ class Profile:
     # whether the second language is French (NCLC) for the +25/+50 additional bonus.
     second_language_is_french: bool = False
 
+    # The candidate's primary occupation as a NOC 2021 five-digit code. Not used by the CRS
+    # math (CRS is occupation-agnostic); it feeds category-based-selection eligibility in
+    # `reachable_paths`. Optional: when absent, occupation-category eligibility stays unknown.
+    noc_code: Optional[str] = None
+
     def __post_init__(self):
         if self.age is None and self.date_of_birth is None:
             raise ValueError("Profile needs either `age` or `date_of_birth`")

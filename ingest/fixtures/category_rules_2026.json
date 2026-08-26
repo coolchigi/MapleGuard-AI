@@ -1,0 +1,397 @@
+{
+ "French-language proficiency": {},
+ "healthcare and social services occupations": {
+  "31100": {
+   "title": "Specialists in clinical and laboratory medicine",
+   "teer": "1"
+  },
+  "31101": {
+   "title": "Specialists in surgery",
+   "teer": "1"
+  },
+  "31102": {
+   "title": "General practitioners and family physicians",
+   "teer": "1"
+  },
+  "31103": {
+   "title": "Veterinarians",
+   "teer": "1"
+  },
+  "31110": {
+   "title": "Dentists",
+   "teer": "1"
+  },
+  "31111": {
+   "title": "Optometrists",
+   "teer": "1"
+  },
+  "31112": {
+   "title": "Audiologists and speech-language pathologists",
+   "teer": "1"
+  },
+  "31120": {
+   "title": "Pharmacists",
+   "teer": "1"
+  },
+  "31121": {
+   "title": "Dietitians and nutritionists",
+   "teer": "1"
+  },
+  "31200": {
+   "title": "Psychologists",
+   "teer": "1"
+  },
+  "31201": {
+   "title": "Chiropractors",
+   "teer": "1"
+  },
+  "31202": {
+   "title": "Physiotherapists",
+   "teer": "1"
+  },
+  "31203": {
+   "title": "Occupational therapists",
+   "teer": "1"
+  },
+  "31209": {
+   "title": "Other professional occupations in health diagnosing and treating",
+   "teer": "1"
+  },
+  "31300": {
+   "title": "Nursing coordinators and supervisors",
+   "teer": "1"
+  },
+  "31301": {
+   "title": "Registered nurses and registered psychiatric nurses",
+   "teer": "1"
+  },
+  "31302": {
+   "title": "Nurse practitioners",
+   "teer": "1"
+  },
+  "31303": {
+   "title": "Physician assistants, midwives and allied health professionals",
+   "teer": "1"
+  },
+  "32101": {
+   "title": "Licensed practical nurses",
+   "teer": "2"
+  },
+  "32102": {
+   "title": "Paramedical occupations",
+   "teer": "2"
+  },
+  "32103": {
+   "title": "Respiratory therapists, clinical perfusionists and cardiopulmonary technologists",
+   "teer": "2"
+  },
+  "32104": {
+   "title": "Animal health technologists and veterinary technicians",
+   "teer": "2"
+  },
+  "32109": {
+   "title": "Other technical occupations in therapy and assessment",
+   "teer": "2"
+  },
+  "32111": {
+   "title": "Dental hygienists and dental therapists",
+   "teer": "2"
+  },
+  "32120": {
+   "title": "Medical laboratory technologists",
+   "teer": "2"
+  },
+  "32121": {
+   "title": "Medical radiation technologists",
+   "teer": "2"
+  },
+  "32122": {
+   "title": "Medical sonographers",
+   "teer": "2"
+  },
+  "32123": {
+   "title": "Cardiology technologists and electrophysiological diagnostic technologists",
+   "teer": "2"
+  },
+  "32124": {
+   "title": "Pharmacy technicians",
+   "teer": "2"
+  },
+  "32129": {
+   "title": "Other medical technologists and technicians",
+   "teer": "2"
+  },
+  "32201": {
+   "title": "Massage therapists",
+   "teer": "2"
+  },
+  "33101": {
+   "title": "Medical laboratory assistants and related technical occupations",
+   "teer": "3"
+  },
+  "33102": {
+   "title": "Nurse aides, orderlies and patient service associates",
+   "teer": "3"
+  },
+  "33103": {
+   "title": "Pharmacy technical assistants and pharmacy assistants",
+   "teer": "3"
+  },
+  "41300": {
+   "title": "Social workers",
+   "teer": "1"
+  },
+  "41301": {
+   "title": "Therapists in counselling and related specialized therapies",
+   "teer": "1"
+  },
+  "42201": {
+   "title": "Social and community service workers",
+   "teer": "2"
+  }
+ },
+ "Science, Technology, Engineering and Math (STEM) occupations": {
+  "20011": {
+   "title": "Architecture and science managers",
+   "teer": "0"
+  },
+  "21220": {
+   "title": "Cybersecurity specialists",
+   "teer": "1"
+  },
+  "21300": {
+   "title": "Civil Engineers",
+   "teer": "1"
+  },
+  "21301": {
+   "title": "Mechanical Engineers",
+   "teer": "1"
+  },
+  "21310": {
+   "title": "Electrical and electronics engineers",
+   "teer": "1"
+  },
+  "21321": {
+   "title": "Industrial and manufacturing engineers",
+   "teer": "1"
+  },
+  "21331": {
+   "title": "Geological Engineers",
+   "teer": "1"
+  },
+  "22300": {
+   "title": "Civil engineering technologists and technicians",
+   "teer": "2"
+  },
+  "22301": {
+   "title": "Mechanical Engineering Technologists and Technicians",
+   "teer": "2"
+  },
+  "22310": {
+   "title": "Electrical and electronics engineering technologists and technicians",
+   "teer": "2"
+  },
+  "63100": {
+   "title": "Insurance agents and brokers",
+   "teer": "3"
+  }
+ },
+ "trade occupations": {
+  "22303": {
+   "title": "Construction estimators",
+   "teer": "2"
+  },
+  "70010": {
+   "title": "Construction managers",
+   "teer": "0"
+  },
+  "70011": {
+   "title": "Home building and renovation managers",
+   "teer": "0"
+  },
+  "72100": {
+   "title": "Machinists and machining and tooling inspectors",
+   "teer": "2"
+  },
+  "72102": {
+   "title": "Sheet metal workers",
+   "teer": "2"
+  },
+  "72106": {
+   "title": "Welders and related machine operators",
+   "teer": "2"
+  },
+  "72200": {
+   "title": "Electricians (except industrial and power system)",
+   "teer": "2"
+  },
+  "72201": {
+   "title": "Industrial electricians",
+   "teer": "2"
+  },
+  "72300": {
+   "title": "Plumbers",
+   "teer": "2"
+  },
+  "72302": {
+   "title": "Gas fitters",
+   "teer": "2"
+  },
+  "72310": {
+   "title": "Carpenters",
+   "teer": "2"
+  },
+  "72311": {
+   "title": "Cabinetmakers",
+   "teer": "2"
+  },
+  "72320": {
+   "title": "Bricklayers",
+   "teer": "2"
+  },
+  "72400": {
+   "title": "Construction millwrights and industrial mechanics",
+   "teer": "2"
+  },
+  "72401": {
+   "title": "Heavy-duty equipment mechanics",
+   "teer": "2"
+  },
+  "72402": {
+   "title": "Heating, refrigeration and air conditioning mechanics",
+   "teer": "2"
+  },
+  "72422": {
+   "title": "Electrical mechanics",
+   "teer": "2"
+  },
+  "72501": {
+   "title": "Water well drillers",
+   "teer": "2"
+  },
+  "72999": {
+   "title": "Other technical trades and related occupations",
+   "teer": "2"
+  },
+  "73100": {
+   "title": "Concrete finishers",
+   "teer": "3"
+  },
+  "73110": {
+   "title": "Roofers and shinglers",
+   "teer": "3"
+  },
+  "73112": {
+   "title": "Painters and decorators (except interior decorators)",
+   "teer": "3"
+  },
+  "73113": {
+   "title": "Floor covering installers",
+   "teer": "3"
+  },
+  "82021": {
+   "title": "Contractors and supervisors, oil and gas drilling and services",
+   "teer": "2"
+  },
+  "63201": {
+   "title": "Butchers - retail and wholesale",
+   "teer": "3"
+  }
+ },
+ "education occupations": {
+  "41220": {
+   "title": "Secondary school teachers",
+   "teer": "1"
+  },
+  "41221": {
+   "title": "Elementary school and kindergarten teachers",
+   "teer": "1"
+  },
+  "42202": {
+   "title": "Early childhood educators and assistants",
+   "teer": "2"
+  },
+  "42203": {
+   "title": "Instructors of persons with disabilities",
+   "teer": "2"
+  },
+  "43100": {
+   "title": "Elementary and secondary school teacher assistants",
+   "teer": "3"
+  }
+ },
+ "transport occupations": {
+  "72404": {
+   "title": "Aircraft mechanics and aircraft inspectors",
+   "teer": "2"
+  },
+  "72600": {
+   "title": "Air pilots, flight engineers and flying instructors",
+   "teer": "2"
+  },
+  "22313": {
+   "title": "Aircraft instrument, electrical and avionics mechanics, technicians and inspectors",
+   "teer": "2"
+  },
+  "72410": {
+   "title": "Automotive service technicians, truck and bus mechanics, and mechanical repairers",
+   "teer": "2"
+  }
+ },
+ "physicians with Canadian work experience": {
+  "31100": {
+   "title": "Specialists in clinical and laboratory medicine",
+   "teer": "1"
+  },
+  "31101": {
+   "title": "Specialists in surgery",
+   "teer": "1"
+  },
+  "31102": {
+   "title": "General practitioners and family physicians",
+   "teer": "1"
+  }
+ },
+ "senior managers with Canadian work experience": {
+  "00012": {
+   "title": "Senior managers - financial, communications and other business services",
+   "teer": "0"
+  },
+  "00013": {
+   "title": "Senior managers - health, education, social and community services and membership organizations",
+   "teer": "0"
+  },
+  "00014": {
+   "title": "Senior managers - trade, broadcasting and other services",
+   "teer": "0"
+  },
+  "00015": {
+   "title": "Senior managers - construction, transportation, production and utilities",
+   "teer": "0"
+  }
+ },
+ "researchers with Canadian work experience": {
+  "41200": {
+   "title": "University professors and lecturers",
+   "teer": "1"
+  },
+  "41201": {
+   "title": "Post-secondary teaching and research assistants",
+   "teer": "1"
+  }
+ },
+ "skilled military recruits": {
+  "40042": {
+   "title": "Commissioned officers of the Canadian Armed Forces",
+   "teer": "0"
+  },
+  "42102": {
+   "title": "Specialized members of the Canadian Armed Forces",
+   "teer": "2"
+  },
+  "43204": {
+   "title": "Operations Members of the Canadian Armed Forces",
+   "teer": "3"
+  }
+ }
+}
