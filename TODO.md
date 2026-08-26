@@ -35,7 +35,7 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [ ] **Seed remaining BC Tech NOCs** — 21311 / 22220 / 21233, the same verbatim way, when wiring the matcher to real use.
 
 ## Feature 1 — Research / ingestion agent
-- [ ] **Draw + rule ingestion** — Open-Gov "rounds of invitations" XLSX primary, canada.ca table via Browser fallback. Every value stamped source URL + date.
+- [~] **Draw + rule ingestion** — draws done (`ingest/`): fetch+parse+cite of IRCC's official rounds-of-invitations JSON feed (`canada.ca/.../json/ee_rounds_123_en.json`) into typed `DrawRecord`s that `to_draw()` onto `paths.Draw`. Every value carries source URL + fetch date + round number; unparseable cutoff/date flags `needs_manual_check` (never guessed) and is refused entry to the engine. Thin fetch separated from pure parsing; real-data fixture + 15 tests, 1 skipif live fetch. TODO: category *rules* (below) and the Browser/XLSX fallback fetcher.
 - [ ] **Category rules** — the 10 2026 categories + eligibility (NOC lists / CLB7 French).
 - [ ] **BC PNP watch** — BC PNP draw pages (Skilled Worker, Tech, sector) via Browser.
 - [ ] **NOC text ingestion** — pull official NOC lead statements/duties on demand for B1.
