@@ -371,6 +371,66 @@ def test_advisor_routes_to_the_strategist_and_the_tool_runs_nested():
     assert screen_response(str(result.message)).allowed
 
 
+# --- 5. Dev-mirror memory + session + state (offline; AWS seams marked) ---------------
+def test_deployment_defaults_are_fully_offline():
+    from agent import Deployment
+    from agent.config import build_memory, build_session_manager
+    cfg = Deployment.from_env(env={})
+    assert cfg.is_offline and cfg.memory_backend == "dev" and cfg.session_backend == "file"
+
+
+def test_aws_backends_refuse_without_required_config():
+    from agent import Deployment
+    from agent.config import build_memory, build_session_manager
+    with pytest.raises(ValueError, match="knowledge_base_id"):
+        build_memory(Deployment(memory_backend="bedrock_kb"))
+    with pytest.raises(ValueError, match="s3_bucket"):
+        build_session_manager("u1", Deployment(session_backend="s3"))
+    assert build_memory(Deployment(memory_backend="none")) is None
+    assert build_session_manager("u1", Deployment(session_backend="none")) is None
+
+
+def test_noc_corpus_seed_passages_carry_citations():
+    from agent import noc_seed_passages
+    passages = noc_seed_passages()
+    assert passages, "no seed passages built"
+    # NOC 21234 (seeded in noc/data.py) has a lead statement and its duties, each cited.
+    codes = {m["noc_code"] for _, m in passages}
+    assert "21234" in codes
+    assert all(m.get("source") for _, m in passages)  # every passage cites its source
+    assert any(m["kind"] == "lead_statement" and m["noc_code"] == "21234" for _, m in passages)
+
+
+def test_dev_memory_retrieves_and_cites_the_noc_source():
+    pytest.importorskip("strands")
+    from agent.memory import build_test_memory, search_sync
+    _, store = build_test_memory(seed=True)
+    hits = search_sync(store, "design create and modify web sites", max_results=2)
+    assert hits, "retrieval returned nothing"
+    # The retrieved passage carries the live NOC source URL as its citation (not a hardcoded
+    # string the model could drift from).
+    assert any(h.metadata.get("noc_code") == "21234"
+               and h.metadata.get("source", "").startswith("https://noc.esdc.gc.ca")
+               for h in hits)
+
+
+def test_dev_orchestrator_persists_conversation_and_profile_state(tmp_path):
+    pytest.importorskip("strands")
+    from agent import build_dev_orchestrator
+    profile = dict(PROFILE)
+    model = _fake_model([{"role": "assistant", "content": [{"text": "Here is your position."}]}])
+    agent = build_dev_orchestrator("user-xyz", profile=profile, model=model,
+                                   storage_dir=str(tmp_path))
+    agent("Where do I stand?")
+    assert agent.state.get("profile") == profile  # the profile lives in agent.state
+    # A fresh agent with the same session_id restores the persisted conversation.
+    reloaded = build_dev_orchestrator(
+        "user-xyz",
+        model=_fake_model([{"role": "assistant", "content": [{"text": "ok"}]}]),
+        storage_dir=str(tmp_path))
+    assert len(reloaded.messages) > 0
+
+
 # --- Optional live test: only when a Bedrock model + AWS creds are configured ---------
 @pytest.mark.skipif(
     not os.environ.get("MAPLEGUARD_AGENT_INTEGRATION"),

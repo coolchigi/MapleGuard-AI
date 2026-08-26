@@ -153,3 +153,38 @@ running SDK before wiring. Everything in sections 1 and 2 (memory stores, sessio
    Observability, each additive over the tested core.
 
 Not started, not merged. Awaiting confirmation on this plan.
+
+---
+
+## What the user must provision in AWS (dev runs without any of this)
+
+The dev mirror runs fully offline: `agent/config.py` defaults to a seeded `TestMemoryStore`
+and a `FileSessionManager`, no AWS. Real provisioning attaches after, by flipping env vars.
+Each item below is the user's own account step (Claude does not provision AWS resources).
+
+1. **Bedrock model access.** Enable the target model in the Bedrock console for the region.
+   The orchestrator's default model resolves at deploy; pick a concrete `BedrockModel`.
+
+2. **Bedrock Knowledge Base** (the cited corpus). Create a KB (a vector store behind it, e.g.
+   OpenSearch Serverless, or a CUSTOM data source for direct writes). Ingest the reference
+   TEXT (start with the NOC 21234 passage already in `noc/data.py`; `agent.noc_seed_passages`
+   produces the same passages for a CUSTOM data source). Then set:
+   - `MAPLEGUARD_MEMORY_BACKEND=bedrock_kb`
+   - `MAPLEGUARD_KB_ID=<knowledge base id>`
+   - `MAPLEGUARD_KB_REGION=<region>`
+   IAM for the runtime role: `bedrock:Retrieve`, `bedrock:GetKnowledgeBase`, and
+   `bedrock:IngestKnowledgeBaseDocuments` (writes only).
+
+3. **S3 bucket for sessions** (persistence across instances). Create a bucket, then set:
+   - `MAPLEGUARD_SESSION_BACKEND=s3`
+   - `MAPLEGUARD_SESSION_BUCKET=<bucket>`
+   - `MAPLEGUARD_SESSION_PREFIX=<prefix, optional>`
+   IAM: `s3:GetObject`, `s3:PutObject`, `s3:ListBucket` on that bucket/prefix.
+
+4. **AgentCore Runtime** (hosting). Package and deploy via the AgentCore path (`build_app` in
+   `agent/runtime.py` is the entrypoint). This provisions the container, scaling, and tracing.
+   AgentCore Code Interpreter, Memory, and Observability attach here; those client surfaces
+   are docs-only above and must be API-verified against the running SDK before wiring.
+
+Nothing in steps 2-4 is required to run or demo the offline dev stack. They are the seams,
+already structured in `config.py`, that a provisioned account flips on.

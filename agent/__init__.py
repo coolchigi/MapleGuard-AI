@@ -13,18 +13,27 @@ Public surface:
   build_app           wrap the handler in a Bedrock AgentCore app for deployment
   never_submit, never_assert_eligibility, GateDecision   the policy gates
 """
+from .config import Deployment, build_memory, build_session_manager
 from .gates import GateDecision, forbidden_tools, never_assert_eligibility, never_submit
-from .orchestrator import (SYSTEM_PROMPT, build_orchestrator, make_policy_gate,
-                           screen_response, tool_name)
+from .memory import build_kb_memory, build_test_memory, noc_seed_passages
+from .orchestrator import (SYSTEM_PROMPT, build_dev_orchestrator, build_orchestrator,
+                           make_policy_gate, screen_response, tool_name)
 from .runtime import build_app, handle
 from .team import (build_advisor_team, build_document_auditor, build_strategist)
 from .tools import (MAPLEGUARD_TOOLS, NOC_TOOLS, POSITION_TOOLS, ToolDeps, configure_deps)
 
 __all__ = [
     "build_orchestrator",
+    "build_dev_orchestrator",
     "build_advisor_team",
     "build_strategist",
     "build_document_auditor",
+    "build_test_memory",
+    "build_kb_memory",
+    "noc_seed_passages",
+    "Deployment",
+    "build_memory",
+    "build_session_manager",
     "MAPLEGUARD_TOOLS",
     "POSITION_TOOLS",
     "NOC_TOOLS",
