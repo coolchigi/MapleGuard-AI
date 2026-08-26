@@ -1,0 +1,184 @@
+{
+  "generatedBy": "web/scripts/precompute.py (real crs engine)",
+  "asOf": "2026-08-22",
+  "asOfHuman": "Aug 22, 2026",
+  "position": {
+    "total": 496,
+    "core": 396,
+    "skillTransfer": 100,
+    "additional": 0,
+    "categories": [
+      {
+        "code": "A",
+        "label": "CORE HUMAN CAPITAL",
+        "cap": 500,
+        "subtotal": 396,
+        "items": [
+          {
+            "label": "Age · 31",
+            "meta": "single-applicant age grid",
+            "points": 99
+          },
+          {
+            "label": "Education · bachelor’s / 3-year",
+            "points": 120
+          },
+          {
+            "label": "First language · CLB 9",
+            "meta": "= 31 pts × 4 abilities",
+            "points": 124
+          },
+          {
+            "label": "Second language · none",
+            "points": 0,
+            "muted": true
+          },
+          {
+            "label": "Canadian work · 2 years",
+            "points": 53
+          }
+        ],
+        "note": "Each factor read from IRCC’s single-applicant grids, then summed — the category is capped at 500.",
+        "cite": "canada.ca/crs-criteria"
+      },
+      {
+        "code": "B",
+        "label": "SKILL TRANSFERABILITY",
+        "cap": 100,
+        "subtotal": 100,
+        "items": [
+          {
+            "label": "Education × language & Canadian work",
+            "meta": "group capped at 50",
+            "points": 50
+          },
+          {
+            "label": "Foreign work · 3 yrs × language & Canadian work",
+            "meta": "group capped at 50",
+            "points": 50
+          }
+        ],
+        "note": "Three factor-groups, each capped at 50; the total is capped at 100.",
+        "cite": "canada.ca/crs-criteria"
+      },
+      {
+        "code": "C",
+        "label": "ADDITIONAL",
+        "cap": 600,
+        "subtotal": 0,
+        "levers": [
+          {
+            "label": "Provincial nomination",
+            "points": "+600"
+          },
+          {
+            "label": "Sibling in Canada",
+            "points": "+15"
+          },
+          {
+            "label": "Canadian study",
+            "points": "+15–30"
+          },
+          {
+            "label": "French-language bonus",
+            "points": "+25–50"
+          }
+        ],
+        "note": "None active on this profile yet — each is the lever that moves the number.",
+        "cite": "canada.ca/crs-criteria"
+      }
+    ]
+  },
+  "lastDraw": {
+    "score": 518,
+    "delta": -22,
+    "cite": "canada.ca/rounds-of-invitations",
+    "date": "2026-08-06"
+  },
+  "trajectory": {
+    "points": [
+      {
+        "date": "2026-08-22",
+        "dateHuman": "Aug 22, 2026",
+        "total": 496
+      },
+      {
+        "date": "2026-11-03",
+        "dateHuman": "Nov 3, 2026",
+        "total": 491
+      },
+      {
+        "date": "2027-03-01",
+        "dateHuman": "Mar 1, 2027",
+        "total": 342
+      },
+      {
+        "date": "2027-11-03",
+        "dateHuman": "Nov 3, 2027",
+        "total": 336
+      },
+      {
+        "date": "2028-11-03",
+        "dateHuman": "Nov 3, 2028",
+        "total": 331
+      },
+      {
+        "date": "2029-11-03",
+        "dateHuman": "Nov 3, 2029",
+        "total": 325
+      },
+      {
+        "date": "2029-12-31",
+        "dateHuman": "Dec 31, 2029",
+        "total": 325
+      }
+    ],
+    "cliffs": [
+      {
+        "date": "2026-11-03",
+        "dateHuman": "Nov 3, 2026",
+        "kind": "age",
+        "delta": -5,
+        "total": 491,
+        "label": "age 32"
+      },
+      {
+        "date": "2027-03-01",
+        "dateHuman": "Mar 1, 2027",
+        "kind": "test_expiry",
+        "delta": -149,
+        "total": 342,
+        "label": "language test expires (profile rejected in-pool)"
+      },
+      {
+        "date": "2027-11-03",
+        "dateHuman": "Nov 3, 2027",
+        "kind": "age",
+        "delta": -6,
+        "total": 336,
+        "label": "age 33"
+      },
+      {
+        "date": "2028-11-03",
+        "dateHuman": "Nov 3, 2028",
+        "kind": "age",
+        "delta": -5,
+        "total": 331,
+        "label": "age 34"
+      },
+      {
+        "date": "2029-11-03",
+        "dateHuman": "Nov 3, 2029",
+        "kind": "age",
+        "delta": -6,
+        "total": 325,
+        "label": "age 35"
+      }
+    ],
+    "testExpiry": "2027-03-01",
+    "testExpiryHuman": "Mar 1, 2027",
+    "testExpiryDelta": -149,
+    "daysToExpiry": 191,
+    "endTotal": 325
+  }
+}
