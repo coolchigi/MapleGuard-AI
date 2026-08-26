@@ -36,7 +36,7 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 
 ## Feature 1 — Research / ingestion agent
 - [~] **Draw + rule ingestion** — draws done (`ingest/`): fetch+parse+cite of IRCC's official rounds-of-invitations JSON feed (`canada.ca/.../json/ee_rounds_123_en.json`) into typed `DrawRecord`s that `to_draw()` onto `paths.Draw`. Every value carries source URL + fetch date + round number; unparseable cutoff/date flags `needs_manual_check` (never guessed) and is refused entry to the engine. Thin fetch separated from pure parsing; real-data fixture + 15 tests, 1 skipif live fetch. TODO: category *rules* (below) and the Browser/XLSX fallback fetcher.
-- [ ] **Category rules** — the 10 2026 categories + eligibility (NOC lists / CLB7 French).
+- [x] **Category rules** — the 10 official 2026 categories + eligibility (`ingest/categories.py`), verified 2026-08-26 against canada.ca `category-based-selection.html` (page dated 2026-06-22). Each occupation category's NOC 2021 list transcribed + completeness-checked (`verified=True`, cited); French is the NCLC-7 rule. `category_eligibility()` gives a deterministic cited verdict (in-list / not / unknown-if-no-input, never guessed). `resolve_category()` is the canonical slug vocabulary both ingest draw slugs and rule keys map through. Wired into `reachable_paths` via a new optional `Profile.noc_code`: occupation categories now decide instead of always `needs_eligibility_check`. 13 tests. NOTE: agriculture/agri-food is NOT a 2026 category (verifying kept it out).
 - [ ] **BC PNP watch** — BC PNP draw pages (Skilled Worker, Tech, sector) via Browser.
 - [ ] **NOC text ingestion** — pull official NOC lead statements/duties on demand for B1.
 

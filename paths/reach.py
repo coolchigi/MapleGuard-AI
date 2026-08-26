@@ -144,11 +144,25 @@ def _eligibility(profile: Profile, draw: Draw) -> tuple[Optional[bool], str]:
         return True, "all pool candidates are eligible"
     if draw.eligible_override is not None:
         return draw.eligible_override, "caller-asserted eligibility"
-    if draw.category == "french":
-        sl = profile.second_language
-        ok = bool(profile.second_language_is_french and sl and sl.min_clb() >= 7)
-        return ok, "French NCLC 7 across abilities" if ok else "needs French NCLC 7 across abilities"
-    return None, "needs NOC-list check (occupation category not yet ingested)"
+
+    # Category-based selection: decide from the official 2026 NOC lists / French rule.
+    # Imported lazily so the deterministic paths package carries no import-time dependency
+    # on ingest (which imports paths for its Draw type).
+    from ingest.categories import resolve_category, category_eligibility
+
+    slug = resolve_category(draw.category or draw.name)
+    if slug is not None:
+        if slug == "french":
+            # The profile fully describes language ability, so "no French" is a determinate
+            # "not eligible" (CLB 0), never "unknown".
+            sl = profile.second_language
+            clb = sl.min_clb() if (profile.second_language_is_french and sl) else 0
+            res = category_eligibility(slug, french_nclc=clb)
+        else:
+            res = category_eligibility(slug, noc_code=profile.noc_code)
+        return res.eligible, res.reason
+
+    return None, "needs NOC-list check (occupation category not recognized)"
 
 
 # ---------------------------------------------------------------------- public
