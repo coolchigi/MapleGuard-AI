@@ -193,3 +193,37 @@ def reachability_to_dict(r: Reachability) -> dict:
         "blocked": [_path_to_dict(p) for p in r.blocked],
         "needs_eligibility_check": [_path_to_dict(p) for p in r.needs_eligibility_check],
     }
+
+
+_REACHABILITY_BUCKETS = ("reachable", "within_reach", "blocked", "needs_eligibility_check")
+
+
+def _draw_key(name: Any, draw_date: Any, source: Any) -> tuple:
+    return (name, str(draw_date), source)
+
+
+def attach_draw_provenance(reachability: dict, input_draws: list) -> dict:
+    """Echo each input draw's `provenance` (the full ingest citation: round number, per-round
+    page, fetch date) onto the matching draw in the reachability output, in place.
+
+    `paths.Draw` carries only a single `source` string, so the richer citation `ingest_draws`
+    produces is dropped at the engine boundary. This re-attaches it in the agent layer, keyed
+    by (name, date, source), so a reported cutoff travels with its full provenance. It only
+    copies a citation the caller already supplied; it never fabricates provenance.
+    """
+    index: dict[tuple, Any] = {}
+    for d in input_draws:
+        if not isinstance(d, dict):
+            continue
+        prov = d.get("provenance")
+        if prov:
+            index[_draw_key(d.get("name"), d.get("date"), d.get("source"))] = prov
+    if not index:
+        return reachability
+    for bucket in _REACHABILITY_BUCKETS:
+        for path in reachability.get(bucket, []):
+            dd = path.get("draw", {})
+            key = _draw_key(dd.get("name"), dd.get("date"), dd.get("source"))
+            if key in index:
+                dd["provenance"] = index[key]
+    return reachability

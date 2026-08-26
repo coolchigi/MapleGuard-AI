@@ -70,3 +70,6 @@ class DrawInput(TypedDict, total=False):
     source: Required[str]                    # citation URL / doc id
     category: str                            # for kind=='category': 'french' | occupation slug
     eligible_override: bool                  # caller-asserted eligibility (occupation categories)
+    round_number: str                        # official round id (from ingest_draws)
+    invitations: int                         # invitations issued this round (from ingest_draws)
+    provenance: dict                         # full ingest citation; echoed onto the result

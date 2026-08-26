@@ -524,6 +524,59 @@ def test_audit_tool_without_a_corpus_is_unchanged():
     assert all(g["source"] for g in report["duties"]["gaps"])  # seed citation still present
 
 
+# --- 7. Draw-cutoff provenance flows from ingest into reachable_paths ------------------
+def _sample_rounds_doc():
+    import pathlib
+    return (pathlib.Path(__file__).parent.parent / "ingest" / "fixtures"
+            / "ee_rounds_sample.json").read_text()
+
+
+def test_ingest_draws_emit_full_provenance_per_cutoff():
+    out = ingest_draws(_sample_rounds_doc(), source_url="https://www.canada.ca/rounds.json")
+    assert out["draws"]
+    for d in out["draws"]:
+        prov = d["provenance"]
+        # The cutoff's provenance is the full ingest citation, not just a bare source string.
+        assert set(prov) >= {"source_url", "round_number", "round_url", "fetched"}
+        assert prov["source_url"] == "https://www.canada.ca/rounds.json"
+        assert d["round_number"] == prov["round_number"]
+
+
+def test_reachable_paths_echoes_provenance_from_ingested_draws():
+    ing = ingest_draws(_sample_rounds_doc(), source_url="https://www.canada.ca/rounds.json")
+    profile = {"education": "bachelors-or-three-year",
+               "first_language": {"speaking": 10, "listening": 10, "reading": 10, "writing": 10},
+               "age": 29, "canadian_work_years": 3}
+    r = reachable_paths(profile, ing["draws"], as_of="2026-08-25")
+    reported = [p for bucket in ("reachable", "within_reach", "blocked",
+                                 "needs_eligibility_check") for p in r[bucket]]
+    assert reported, "no draws reported"
+    # Every reported cutoff carries its ingest provenance (round number + source), so the
+    # strategist can cite where the number came from.
+    for p in reported:
+        prov = p["draw"]["provenance"]
+        assert prov["round_number"] and prov["source_url"]
+
+
+def test_reachable_paths_without_provenance_is_unchanged():
+    total = compute_crs(PROFILE, as_of="2026-08-25")["total"]
+    draws = [{"kind": "general", "name": "EE #340", "cutoff": total - 10, "date": "2026-08-06",
+              "source": "https://www.canada.ca/x"}]  # no provenance supplied
+    r = reachable_paths(PROFILE, draws, as_of="2026-08-25")
+    assert "provenance" not in r["reachable"][0]["draw"]
+
+
+def test_attach_draw_provenance_matches_by_identity():
+    from agent import serde
+    reach = {"reachable": [{"draw": {"name": "General", "date": "2026-08-06",
+                                     "source": "s1", "cutoff": 500}}],
+             "within_reach": [], "blocked": [], "needs_eligibility_check": []}
+    inputs = [{"name": "General", "date": "2026-08-06", "source": "s1",
+               "provenance": {"round_number": "294", "source_url": "s1"}}]
+    out = serde.attach_draw_provenance(reach, inputs)
+    assert out["reachable"][0]["draw"]["provenance"]["round_number"] == "294"
+
+
 # --- Optional live test: only when a Bedrock model + AWS creds are configured ---------
 @pytest.mark.skipif(
     not os.environ.get("MAPLEGUARD_AGENT_INTEGRATION"),

@@ -158,19 +158,23 @@ def reachable_paths(profile: ProfileInput, draws: list[DrawInput], as_of: Option
     Args:
         profile: The candidate profile.
         draws: Live draws, each {kind, name, cutoff, date, source, category?,
-            eligible_override?}. kind is 'general' | 'category' | 'pnp_bc'.
+            eligible_override?, provenance?}. kind is 'general' | 'category' | 'pnp_bc'.
+            Pass the draws straight from ingest_draws to carry each cutoff's full provenance
+            (round number, per-round page, fetch date) through to the result.
         as_of: Optional ISO 'YYYY-MM-DD' to evaluate as of.
         bc_offer: Optional BC job offer used to score pnp_bc draws.
 
     Returns:
-        A dict with reachable[], within_reach[], blocked[], needs_eligibility_check[].
+        A dict with reachable[], within_reach[], blocked[], needs_eligibility_check[]. Each
+        reported draw echoes its `provenance` when the input draw carried one.
     """
     from paths import reachable_paths as _reachable_paths
     p = serde.profile_from_dict(profile)
     typed_draws = [serde.draw_from_dict(d) for d in draws]
     result = _reachable_paths(p, typed_draws, serde._parse_date(as_of),
                               serde.bc_offer_from_dict(bc_offer))
-    return serde.reachability_to_dict(result)
+    out = serde.reachability_to_dict(result)
+    return serde.attach_draw_provenance(out, draws)
 
 
 @tool
@@ -186,18 +190,26 @@ def ingest_draws(rounds_json: str, source_url: Optional[str] = None) -> dict:
 
     Returns:
         A dict with draws[] (usable, cited draws ready for reachable_paths) and
-        needs_manual_check[] (records refused because a field could not be parsed).
+        needs_manual_check[] (records refused because a field could not be parsed). Each usable
+        draw carries `provenance` (source_url, round_number, per-round page, fetch date), which
+        reachable_paths echoes onto the reported cutoff.
     """
     kwargs = {"source_url": source_url} if source_url else {}
     records = parse_rounds_json(rounds_json, **kwargs)
-    usable = to_draws(records)  # only records that are not flagged
+    to_draws(records)  # revalidate: raises if a usable record would build an uncited Draw
+    draws = []
+    for r in records:
+        if r.needs_manual_check or r.cutoff is None:
+            continue
+        draws.append({
+            "kind": r.kind, "name": r.name, "cutoff": r.cutoff,
+            "date": r.date.isoformat(), "source": r.citation.source_url,
+            "category": r.category, "round_number": r.round_number,
+            "invitations": r.invitations,
+            "provenance": r.citation.as_dict(),
+        })
     flagged = [r.as_dict() for r in records if r.needs_manual_check]
-    return {
-        "draws": [{"kind": d.kind, "name": d.name, "cutoff": d.cutoff,
-                   "date": d.date.isoformat(), "source": d.source, "category": d.category}
-                  for d in usable],
-        "needs_manual_check": flagged,
-    }
+    return {"draws": draws, "needs_manual_check": flagged}
 
 
 # --------------------------------------------------------------- model-backed tools
