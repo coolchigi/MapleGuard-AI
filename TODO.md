@@ -4,7 +4,7 @@ Single source of truth for what is done and what is outstanding. Update as you g
 Spec: `../concept-spec-mapleguard.md` · Why/value: `../why-mapleguard.md`.
 Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q`
 
-**Status 2026-08-22:** 104 passed, 16 skipped (live LLM/AWS), 1 xfail (34 pass with Strands installed). Agent layer live: genuine Strands orchestrator + tools + gates + cited-corpus memory + session storage, all offline-testable, AWS seams marked. Pushed to github.com/coolchigi/MapleGuard-AI. CRS engine validated against IRCC's official tool (golden oracle 474). Deterministic core complete end to end: `crs` → `trajectory`/`deadlines` → `sirs_bc` → `reachable_paths`. **NOC feature complete**: LLM duty matcher, correction-draft generator, first three BC Tech NOCs, and the NEEDS_VERIFICATION guard, all merged to main. **Frontend designed** (not built): the position panel + time machine are locked in a Claude Design canvas (editorial + passport style, cited show-your-work breakdown, −149 test-expiry cliff) — artifact https://claude.ai/code/artifact/458b1662-5d86-40d7-bd26-f33068094f29. Nothing deployed yet.
+**Status 2026-08-26:** 127 passed, 16 skipped (live LLM/AWS), 1 xfail. Agent layer live (genuine Strands: tools + gates + cited-corpus memory + session storage). **Autonomous monitoring loop done** (Feature 4 core: scheduled tick → re-fetch → re-score → cited alert). **Category rules done** (Feature 1: occupation-category eligibility now decides). MIT LICENSE + architecture diagram + 4 technical blogs + session-coordination protocol added. Pushed to github.com/coolchigi/MapleGuard-AI. Pre-mortem priorities: ship a deployed screen (in progress) + the autonomous loop (done) + visible AgentCore (provisioning pending). CRS engine validated against IRCC's official tool (golden oracle 474). Deterministic core complete end to end: `crs` → `trajectory`/`deadlines` → `sirs_bc` → `reachable_paths`. **NOC feature complete**: LLM duty matcher, correction-draft generator, first three BC Tech NOCs, and the NEEDS_VERIFICATION guard, all merged to main. **Frontend designed** (not built): the position panel + time machine are locked in a Claude Design canvas (editorial + passport style, cited show-your-work breakdown, −149 test-expiry cliff) — artifact https://claude.ai/code/artifact/458b1662-5d86-40d7-bd26-f33068094f29. Nothing deployed yet.
 
 > Note: the CRS `engine.py`/`tables.py` were rebuilt on 2026-08-21 after an accidental overwrite; the rebuild passes every prior test including the 474 oracle and the skill-transfer anchors, so it is functionally the restored engine.
 
@@ -40,11 +40,12 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 - [ ] **BC PNP watch** — BC PNP draw pages (Skilled Worker, Tech, sector) via Browser.
 - [ ] **NOC text ingestion** — pull official NOC lead statements/duties on demand for B1.
 
-## Feature 4 — Alerting engine (outbound email)
-- [ ] **Snapshot + diff worker** — scheduled fetch, diff rules vs last snapshot, store snapshots in DynamoDB.
-- [ ] **Profile correlation** — query which profiles a change/draw/deadline affects.
-- [ ] **`deadlines()`-driven staleness alerts** — email before the test-expiry / age cliff.
-- [ ] **SES send** — targeted email: the change, the impact, the reachable alternatives.
+## Feature 4 — Alerting engine (outbound email) — `agent/monitor` (autonomous loop)
+- [x] **Snapshot + diff worker** — `tick(deps, as_of)` ingests latest draws, diffs vs stored snapshot (via `sort_records`), saves snapshot. `scheduled_handler` is the cron/EventBridge entrypoint (the unprompted scheduled invocation IS the autonomy). Store behind an interface: InMemory/File dev, DynamoDB marked seam.
+- [x] **Profile correlation** — re-scores every stored profile (`reachable_paths` + `deadlines`) and emits a cited alert per affected profile. Relevance filter: only a self-actionable move triggers (not the universal +600), so silence is a feature.
+- [x] **`deadlines()`-driven staleness alerts** — test-expiry / age cliffs carried as cited context in the alert.
+- [~] **SES send** — `CollectingAlertSink` produces + logs the alert; SES send is a marked seam, the final send stays gated (compute-and-refuse on the button). No email leaves the module yet.
+- Note: the Strands agent attaches as an optional narrator that phrases the finished payload; the diff + alert DECISION is pure Python (LLM not in the decision path).
 
 ## Feature 5 — BC PNP window radar
 - [ ] Scheduled BC PNP draw watch → `sirs_bc` score → cutoff match + job-offer flag → alert. (Lean on Tech pathway job-offer-exempt occupations.)
