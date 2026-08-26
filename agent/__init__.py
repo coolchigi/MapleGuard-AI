@@ -17,11 +17,17 @@ from .gates import GateDecision, forbidden_tools, never_assert_eligibility, neve
 from .orchestrator import (SYSTEM_PROMPT, build_orchestrator, make_policy_gate,
                            screen_response, tool_name)
 from .runtime import build_app, handle
-from .tools import MAPLEGUARD_TOOLS, ToolDeps, configure_deps
+from .team import (build_advisor_team, build_document_auditor, build_strategist)
+from .tools import (MAPLEGUARD_TOOLS, NOC_TOOLS, POSITION_TOOLS, ToolDeps, configure_deps)
 
 __all__ = [
     "build_orchestrator",
+    "build_advisor_team",
+    "build_strategist",
+    "build_document_auditor",
     "MAPLEGUARD_TOOLS",
+    "POSITION_TOOLS",
+    "NOC_TOOLS",
     "SYSTEM_PROMPT",
     "make_policy_gate",
     "tool_name",

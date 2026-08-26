@@ -291,6 +291,86 @@ def test_handle_blocks_an_eligibility_verdict_from_the_model():
     assert out.get("blocked") is True and out["gate"] == "never_assert_eligibility"
 
 
+# --- 4. Team: the optional auditor + strategist agent-as-tool split -------------------
+def _fake_model_factory(scripts):
+    """Hand each agent (built in order: strategist, auditor, advisor) its own scripted fake
+    model. A stateful fake must not be shared, so the team takes a factory, not one model."""
+    queue = list(scripts)
+
+    def make():
+        return _fake_model(queue.pop(0))
+    return make
+
+
+def test_advisor_team_is_two_specialists_as_native_agent_tools():
+    pytest.importorskip("strands")
+    from agent import build_advisor_team, build_document_auditor, build_strategist, NOC_TOOLS, POSITION_TOOLS
+    from agent.orchestrator import tool_name
+    factory = _fake_model_factory([[], [], []])  # construction only, no invocation
+    advisor = build_advisor_team(model_factory=factory)
+    # The advisor's tools are exactly the two specialists, wrapped by the SDK's as_tool().
+    assert advisor.tool_names == ["strategist", "document_auditor"]
+    # Each specialist owns the right deterministic kit and nothing else.
+    strat = build_strategist(model=_fake_model([]))
+    aud = build_document_auditor(model=_fake_model([]))
+    assert strat.tool_names == [tool_name(t) for t in POSITION_TOOLS]
+    assert aud.tool_names == [tool_name(t) for t in NOC_TOOLS]
+
+
+def test_no_team_agent_can_carry_a_submission_tool():
+    pytest.importorskip("strands")
+    from agent import build_advisor_team, build_document_auditor, build_strategist
+    for agent in (build_strategist(model=_fake_model([])),
+                  build_document_auditor(model=_fake_model([])),
+                  build_advisor_team(model_factory=_fake_model_factory([[], [], []]))):
+        assert forbidden_tools(agent.tool_names) == []
+
+
+def test_strategist_runs_the_real_loop_and_computes_a_number():
+    pytest.importorskip("strands")
+    from agent import build_strategist
+    model = _fake_model([
+        {"role": "assistant", "content": [{"toolUse": {
+            "name": "compute_crs", "toolUseId": "s1",
+            "input": {"profile": PROFILE, "as_of": "2026-08-25"}}}]},
+        {"role": "assistant", "content": [{"text": "Your CRS is computed above."}]},
+    ])
+    strat = build_strategist(model=model)
+    strat("Compute my CRS.")
+    results = [b["toolResult"] for m in strat.messages for b in m["content"]
+               if isinstance(b, dict) and "toolResult" in b]
+    assert results, "the strategist did not execute compute_crs"
+
+
+def test_advisor_routes_to_the_strategist_and_the_tool_runs_nested():
+    pytest.importorskip("strands")
+    from agent import build_advisor_team
+    # strategist script: call compute_crs, then answer. auditor: unused. advisor: call the
+    # strategist agent-tool (input arg is "input"), then answer.
+    factory = _fake_model_factory([
+        [  # strategist
+            {"role": "assistant", "content": [{"toolUse": {
+                "name": "compute_crs", "toolUseId": "s1",
+                "input": {"profile": PROFILE, "as_of": "2026-08-25"}}}]},
+            {"role": "assistant", "content": [{"text": "The strategist computed the CRS."}]},
+        ],
+        [{"role": "assistant", "content": [{"text": "unused"}]}],  # auditor
+        [  # advisor
+            {"role": "assistant", "content": [{"toolUse": {
+                "name": "strategist", "toolUseId": "a1",
+                "input": {"input": "Compute this candidate's CRS as of 2026-08-25."}}}]},
+            {"role": "assistant", "content": [{"text": "Here is your position, computed and cited."}]},
+        ],
+    ])
+    advisor = build_advisor_team(model_factory=factory)
+    result = advisor("Where do I stand?")
+    # The advisor delegated to the strategist, and inside that sub-agent the real tool ran.
+    advisor_tool_results = [b["toolResult"] for m in advisor.messages for b in m["content"]
+                            if isinstance(b, dict) and "toolResult" in b]
+    assert advisor_tool_results, "the advisor did not delegate to a specialist"
+    assert screen_response(str(result.message)).allowed
+
+
 # --- Optional live test: only when a Bedrock model + AWS creds are configured ---------
 @pytest.mark.skipif(
     not os.environ.get("MAPLEGUARD_AGENT_INTEGRATION"),

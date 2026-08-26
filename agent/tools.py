@@ -245,14 +245,21 @@ def draft_corrected_letter(letter_text: str, noc_code: str,
     }
 
 
-# The registry the orchestrator hands to the Strands Agent. Order is stable and documented.
-MAPLEGUARD_TOOLS = [
+# Tool groupings. POSITION_TOOLS is the deterministic position engine (the strategist's
+# kit); NOC_TOOLS is the reference-letter work (the document auditor's kit). The flat
+# MAPLEGUARD_TOOLS is their union, handed to the single orchestrator. The two subsets exist
+# so an optional agent-as-tool split (agent/team.py) can give each specialist its own kit
+# without changing tool behaviour. Order is stable and documented.
+POSITION_TOOLS = [
     compute_crs,
     crs_trajectory,
     crs_deadlines,
     sirs_bc,
     reachable_paths,
     ingest_draws,
+]
+NOC_TOOLS = [
     audit_reference_letter,
     draft_corrected_letter,
 ]
+MAPLEGUARD_TOOLS = POSITION_TOOLS + NOC_TOOLS
