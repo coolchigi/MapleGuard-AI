@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from ingest import (DrawRecord, parse_rounds, parse_rounds_json, to_draws, classify,
-                    ROUNDS_JSON_URL, fetch_rounds_json)
+                    ROUNDS_JSON_URL, fetch_rounds_json, round_sort_key, sort_records)
 from paths import Draw
 
 FIXTURE = Path(__file__).resolve().parent.parent / "ingest" / "fixtures" / "ee_rounds_sample.json"
@@ -107,6 +107,32 @@ def test_malformed_date_flagged():
     ]}
     [rec] = parse_rounds(payload, fetched=FETCHED)
     assert rec.needs_manual_check and "unparseable date" in rec.notes
+
+
+# --- Ordering: round numbers are identifiers, so sort numerically not lexically ------
+def test_round_sort_key_is_numeric_with_suffix_tiebreak():
+    assert round_sort_key("294") == (294, "")
+    assert round_sort_key("91a") == (91, "a")
+    assert round_sort_key("91b") == (91, "b")
+    # The whole point: numeric order, where a raw string sort would be wrong.
+    assert sorted(["100", "91", "91a", "294"], key=round_sort_key) == ["91", "91a", "100", "294"]
+    assert round_sort_key("91a") < round_sort_key("91b") < round_sort_key("100")
+
+
+def test_round_sort_key_malformed_sorts_to_front_without_crashing():
+    assert round_sort_key("(unknown)") == (-1, "(unknown)")
+    assert round_sort_key("") == (-1, "")
+
+
+def test_sort_records_orders_by_date_then_round(records):
+    ordered = sort_records(records)
+    dates = [r.date for r in ordered]
+    assert dates == sorted(dates)
+    # 91a and 91b share a date (2018-05-30); the suffix breaks the tie in order.
+    idx = {r.round_number: i for i, r in enumerate(ordered)}
+    assert idx["91a"] < idx["91b"]
+    # newest_first surfaces the latest-dated round first.
+    assert sort_records(records, newest_first=True)[0].date == max(dates)
 
 
 # --- Mapping onto paths.Draw --------------------------------------------------------

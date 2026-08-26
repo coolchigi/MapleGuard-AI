@@ -50,6 +50,20 @@ def _parse_date(raw: Optional[str]) -> Optional[date]:
     return None
 
 
+def round_sort_key(number: str) -> Tuple[int, str]:
+    """Order rounds numerically, with any letter suffix as the tiebreaker.
+
+    Round numbers are identifiers, not quantities, so they are stored as strings -- but that
+    means a plain string sort is wrong ("100" < "91"). Sort by this key instead. Same-day
+    split draws like "91a"/"91b" order by their suffix. A malformed id sorts to the front
+    (it is already flagged needs_manual_check) rather than crashing the sort.
+
+        "294" -> (294, "")   "91a" -> (91, "a")   "91b" -> (91, "b")
+    """
+    m = re.match(r"(\d+)([a-z]*)$", (number or "").strip(), re.IGNORECASE)
+    return (int(m.group(1)), m.group(2).lower()) if m else (-1, number or "")
+
+
 def _slugify(name: str) -> str:
     # Drop the trailing version / year qualifier, then slugify what names the category.
     head = re.split(r"[,(]", name, maxsplit=1)[0]
@@ -138,6 +152,16 @@ def to_draws(records: List[DrawRecord]):
     reach the engine. Inspect the dropped ones via their ``needs_manual_check`` flag.
     """
     return [r.to_draw() for r in records if not r.needs_manual_check]
+
+
+def sort_records(records: List[DrawRecord], newest_first: bool = False) -> List[DrawRecord]:
+    """Return records in chronological order: by date, then round number as tiebreaker.
+
+    Use this (or ``round_sort_key``) instead of sorting on ``round_number`` directly -- a raw
+    string sort mis-orders "100" before "91". ``newest_first`` reverses for "latest draw".
+    """
+    ordered = sorted(records, key=lambda r: (r.date, round_sort_key(r.round_number)))
+    return list(reversed(ordered)) if newest_first else ordered
 
 
 def fetch_rounds_json(url: str = ROUNDS_JSON_URL, timeout: float = 30.0) -> str:
