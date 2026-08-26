@@ -229,6 +229,19 @@ def test_orchestration_loop_calls_a_tool_then_answers():
     assert "eligible" not in str(result.message).lower() or screen_response(str(result.message)).allowed
 
 
+def test_tool_specs_are_richly_typed_not_loose_dicts():
+    pytest.importorskip("strands")
+    from agent.tools import compute_crs, reachable_paths
+    crs_spec = json.dumps(compute_crs.tool_spec)
+    # The profile is a structured schema (nested language object), not a bare object, and
+    # education is an enum of the published levels, not a free string.
+    assert "LanguageScoresInput" in crs_spec
+    assert "bachelors-or-three-year" in crs_spec  # education Literal became an enum
+    # A draw list is typed element-by-element, carrying the required source citation field.
+    reach_spec = json.dumps(reachable_paths.tool_spec)
+    assert "DrawInput" in reach_spec and "source" in reach_spec
+
+
 def test_build_orchestrator_refuses_a_submission_tool():
     pytest.importorskip("strands")
     from strands import tool as strands_tool

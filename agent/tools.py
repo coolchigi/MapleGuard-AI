@@ -38,6 +38,7 @@ from noc import LetterCorrector, LLMDutyMatcher, audit_letter, get_occupation
 from pnp import sirs_bc as _sirs_bc
 
 from . import serde
+from .schemas import BCJobOfferInput, DrawInput, ProfileInput
 
 
 # --------------------------------------------------------- injected model clients
@@ -74,7 +75,7 @@ def configure_deps(matcher: Any = None, corrector: Any = None) -> ToolDeps:
 
 # --------------------------------------------------------------- deterministic tools
 @tool
-def compute_crs(profile: dict, as_of: Optional[str] = None) -> dict:
+def compute_crs(profile: ProfileInput, as_of: Optional[str] = None) -> dict:
     """Compute a candidate's Comprehensive Ranking System (CRS) score from the published
     IRCC grid. Returns the total, the four block subtotals, and a per-factor breakdown.
 
@@ -91,7 +92,7 @@ def compute_crs(profile: dict, as_of: Optional[str] = None) -> dict:
 
 
 @tool
-def crs_trajectory(profile: dict, start: str, end: str) -> dict:
+def crs_trajectory(profile: ProfileInput, start: str, end: str) -> dict:
     """Plot a candidate's CRS over a date range, with each dated cliff labelled (an
     age-bracket drop, a language-test expiry). The 'time machine' data. Needs a
     date_of_birth on the profile.
@@ -109,7 +110,7 @@ def crs_trajectory(profile: dict, start: str, end: str) -> dict:
 
 
 @tool
-def crs_deadlines(profile: dict, as_of: Optional[str] = None) -> dict:
+def crs_deadlines(profile: ProfileInput, as_of: Optional[str] = None) -> dict:
     """Return the dated events that move a candidate's CRS: upcoming age-bracket cliffs and
     the language-test expiry (after which in-pool language points drop to zero). Needs a
     date_of_birth on the profile.
@@ -126,7 +127,7 @@ def crs_deadlines(profile: dict, as_of: Optional[str] = None) -> dict:
 
 
 @tool
-def sirs_bc(profile: dict, offer: Optional[dict] = None) -> dict:
+def sirs_bc(profile: ProfileInput, offer: Optional[BCJobOfferInput] = None) -> dict:
     """Compute a candidate's BC PNP Skills Immigration Registration System (SIRS) score,
     out of 200, from the BC grid. Flags whether a BC job offer is required to register and
     notes the +600 CRS a provincial nomination adds.
@@ -144,8 +145,8 @@ def sirs_bc(profile: dict, offer: Optional[dict] = None) -> dict:
 
 
 @tool
-def reachable_paths(profile: dict, draws: list, as_of: Optional[str] = None,
-                    bc_offer: Optional[dict] = None) -> dict:
+def reachable_paths(profile: ProfileInput, draws: list[DrawInput], as_of: Optional[str] = None,
+                    bc_offer: Optional[BCJobOfferInput] = None) -> dict:
     """Classify every live draw for this profile against its published cutoff: reachable
     now, within reach via a single ranked move, blocked, or eligibility-unknown (an
     occupation category that needs IRCC's NOC list). Each draw must carry a source citation.
