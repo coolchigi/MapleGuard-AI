@@ -8,6 +8,8 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 
 > Note: the CRS `engine.py`/`tables.py` were rebuilt on 2026-08-21 after an accidental overwrite; the rebuild passes every prior test including the 474 oracle and the skill-transfer anchors, so it is functionally the restored engine.
 
+> **PENDING (orchestrator, user-approved 2026-08-26):** restructure to `server/` (all Python: crs pnp paths noc ingest agent tests) + `web/` + `docs/`, in ONE pass the moment the AgentCore session merges (the quiet window). `git mv` to preserve history; update all doc/path references + the `PYTHONPATH` test command; then all sessions branch from the new layout. Do NOT start it while a Python builder has an unmerged branch.
+
 ---
 
 ## Feature 3 — Deterministic position engine (the heart)
