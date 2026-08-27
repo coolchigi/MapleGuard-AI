@@ -19,17 +19,23 @@ from typing import Any, Optional
 from .orchestrator import build_orchestrator, screen_response
 
 
-def handle(payload: dict, agent: Any = None, model: Any = None) -> dict:
+def handle(payload: dict, agent: Any = None, model: Any = None,
+           include_trace: bool = True) -> dict:
     """Process one invocation. AWS-free and synchronous, so it is unit-testable offline.
 
     Args:
         payload: The request. Reads `prompt` (the user's message).
         agent: A prebuilt orchestrator to reuse. If None, one is built (with `model`).
         model: Model to build the agent with when `agent` is None (inject a fake offline).
+        include_trace: Attach the agent-loop trace (which tools ran, cycle count) to the
+            result. This is the observability proof surface — it shows every deterministic
+            tool the loop executed to build the answer, so "the model computed nothing
+            itself" is verifiable, not asserted. See agent/observability.py.
 
     Returns:
-        {"result": <text>} on success, or {"blocked": True, "gate": ..., "reason": ...}
-        when the never-assert-eligibility gate refuses the model's answer.
+        {"result": <text>, "trace": {...}} on success, or
+        {"blocked": True, "gate": ..., "reason": ...} when the never-assert-eligibility gate
+        refuses the model's answer.
     """
     prompt = payload.get("prompt", "")
     if agent is None:
@@ -41,7 +47,11 @@ def handle(payload: dict, agent: Any = None, model: Any = None) -> dict:
     decision = screen_response(text)
     if not decision.allowed:
         return {"blocked": True, "gate": decision.gate, "reason": decision.reason}
-    return {"result": text}
+    out = {"result": text}
+    if include_trace:
+        from .observability import agent_loop_trace
+        out["trace"] = agent_loop_trace(result)
+    return out
 
 
 def _result_text(result: Any) -> str:

@@ -16,7 +16,13 @@ Public surface:
 from .citations import cite_gaps_from_corpus, retrieve_citation
 from .config import Deployment, build_memory, build_session_manager
 from .gates import GateDecision, forbidden_tools, never_assert_eligibility, never_submit
-from .memory import build_kb_memory, build_test_memory, noc_seed_passages
+from .memory import (build_agentcore_session_manager, build_kb_memory, build_test_memory,
+                     noc_seed_passages)
+from .observability import (DEFAULT_TRACE_ATTRIBUTES, agent_loop_trace, enable_tracing,
+                            format_loop_trace)
+from .sandbox import (AgentCoreCodeSandbox, LocalSubprocessSandbox, ReproducibleScore,
+                      SandboxResult, build_agentcore_sandbox, crs_sandbox_snippet,
+                      run_crs_in_sandbox)
 from .monitor import (Alert, CollectingAlertSink, FileSnapshotStore, InMemoryProfileStore,
                       InMemorySnapshotStore, MonitorDeps, Snapshot, StoredProfile, TickResult,
                       scheduled_handler, tick)
@@ -34,7 +40,19 @@ __all__ = [
     "build_document_auditor",
     "build_test_memory",
     "build_kb_memory",
+    "build_agentcore_session_manager",
     "noc_seed_passages",
+    "run_crs_in_sandbox",
+    "crs_sandbox_snippet",
+    "build_agentcore_sandbox",
+    "LocalSubprocessSandbox",
+    "AgentCoreCodeSandbox",
+    "SandboxResult",
+    "ReproducibleScore",
+    "enable_tracing",
+    "agent_loop_trace",
+    "format_loop_trace",
+    "DEFAULT_TRACE_ATTRIBUTES",
     "cite_gaps_from_corpus",
     "retrieve_citation",
     "Deployment",
