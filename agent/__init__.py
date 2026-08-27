@@ -17,6 +17,9 @@ from .citations import cite_gaps_from_corpus, retrieve_citation
 from .config import Deployment, build_memory, build_session_manager
 from .gates import GateDecision, forbidden_tools, never_assert_eligibility, never_submit
 from .memory import build_kb_memory, build_test_memory, noc_seed_passages
+from .monitor import (Alert, CollectingAlertSink, FileSnapshotStore, InMemoryProfileStore,
+                      InMemorySnapshotStore, MonitorDeps, Snapshot, StoredProfile, TickResult,
+                      scheduled_handler, tick)
 from .orchestrator import (SYSTEM_PROMPT, build_dev_orchestrator, build_orchestrator,
                            make_policy_gate, screen_response, tool_name)
 from .runtime import build_app, handle
@@ -52,4 +55,15 @@ __all__ = [
     "never_assert_eligibility",
     "forbidden_tools",
     "GateDecision",
+    "tick",
+    "scheduled_handler",
+    "MonitorDeps",
+    "StoredProfile",
+    "Snapshot",
+    "Alert",
+    "TickResult",
+    "InMemorySnapshotStore",
+    "FileSnapshotStore",
+    "InMemoryProfileStore",
+    "CollectingAlertSink",
 ]

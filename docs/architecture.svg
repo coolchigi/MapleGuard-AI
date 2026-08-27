@@ -1,0 +1,129 @@
+<svg viewBox="0 0 1120 880" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue', Arial, sans-serif">
+  <rect width="1120" height="880" fill="#F7F5F0"/>
+
+  <!-- title -->
+  <text x="60" y="58" font-size="30" font-weight="800" fill="#14110D" letter-spacing="-0.5">MapleGuard — architecture</text>
+  <text x="60" y="86" font-size="15" fill="#6E6656">Determinism below the model. Every number is computed from published government grids and cited to source.</text>
+  <text x="60" y="107" font-size="15" fill="#C0362C" font-weight="600">The model never computes a score, never asserts eligibility, never submits.</text>
+
+  <!-- ============ SOURCES ============ -->
+  <text x="60" y="150" font-size="12" font-weight="700" letter-spacing="1.5" fill="#6E6656">OFFICIAL SOURCES (cited)</text>
+  <g font-size="13" fill="#14110D">
+    <rect x="60" y="162" width="300" height="46" rx="8" fill="#FFFFFF" stroke="#D8D2C4"/>
+    <text x="76" y="184" font-weight="600">IRCC rounds-of-invitations (JSON)</text>
+    <text x="76" y="200" font-size="11" fill="#6E6656" font-family="monospace">canada.ca · draws + cutoffs</text>
+    <rect x="380" y="162" width="300" height="46" rx="8" fill="#FFFFFF" stroke="#D8D2C4"/>
+    <text x="396" y="184" font-weight="600">NOC 2021 / ESDC</text>
+    <text x="396" y="200" font-size="11" fill="#6E6656" font-family="monospace">noc.esdc.gc.ca · duties</text>
+    <rect x="700" y="162" width="300" height="46" rx="8" fill="#FFFFFF" stroke="#D8D2C4"/>
+    <text x="716" y="184" font-weight="600">BC PNP</text>
+    <text x="716" y="200" font-size="11" fill="#6E6656" font-family="monospace">SIRS + draw pages</text>
+  </g>
+
+  <!-- arrow down -->
+  <path d="M530 208 V232" stroke="#C0362C" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ============ DETERMINISTIC CORE ============ -->
+  <rect x="46" y="240" width="1028" height="150" rx="12" fill="#EFEAdd" fill-opacity="0.55" stroke="#14110D" stroke-width="1.5"/>
+  <text x="66" y="266" font-size="13" font-weight="800" letter-spacing="1" fill="#14110D">DETERMINISTIC CORE — pure Python, the source of truth</text>
+  <text x="66" y="284" font-size="12" fill="#6E6656">Validated against IRCC's own calculator (oracle 474). Every value carries source + date; unverifiable data is flagged, never guessed.</text>
+  <g font-size="13.5" fill="#14110D" font-weight="600">
+    <rect x="66" y="300" width="182" height="70" rx="8" fill="#FFFFFF" stroke="#D8D2C4"/>
+    <text x="80" y="326">crs</text>
+    <text x="80" y="346" font-size="11" font-weight="400" fill="#6E6656">CRS engine +</text>
+    <text x="80" y="360" font-size="11" font-weight="400" fill="#6E6656">time machine</text>
+    <rect x="262" y="300" width="160" height="70" rx="8" fill="#FFFFFF" stroke="#D8D2C4"/>
+    <text x="276" y="326">pnp</text>
+    <text x="276" y="346" font-size="11" font-weight="400" fill="#6E6656">BC SIRS scorer</text>
+    <rect x="436" y="300" width="182" height="70" rx="8" fill="#FFFFFF" stroke="#D8D2C4"/>
+    <text x="450" y="326">paths</text>
+    <text x="450" y="346" font-size="11" font-weight="400" fill="#6E6656">reachable paths +</text>
+    <text x="450" y="360" font-size="11" font-weight="400" fill="#6E6656">shortest move</text>
+    <rect x="632" y="300" width="182" height="70" rx="8" fill="#FFFFFF" stroke="#D8D2C4"/>
+    <text x="646" y="326">noc</text>
+    <text x="646" y="346" font-size="11" font-weight="400" fill="#6E6656">letter pre-audit +</text>
+    <text x="646" y="360" font-size="11" font-weight="400" fill="#6E6656">correction draft</text>
+    <rect x="828" y="300" width="180" height="70" rx="8" fill="#FFFFFF" stroke="#D8D2C4"/>
+    <text x="842" y="326">ingest</text>
+    <text x="842" y="346" font-size="11" font-weight="400" fill="#6E6656">cited draw feed</text>
+  </g>
+
+  <!-- double arrow core <-> agent -->
+  <path d="M530 390 V416" stroke="#14110D" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrowup)"/>
+  <text x="545" y="408" font-size="11" fill="#6E6656">tools</text>
+
+  <!-- ============ AGENT LAYER ============ -->
+  <rect x="46" y="424" width="1028" height="164" rx="12" fill="#FFFFFF" stroke="#14110D" stroke-width="1.5"/>
+  <text x="66" y="450" font-size="13" font-weight="800" letter-spacing="1" fill="#14110D">AGENT LAYER — Strands orchestrator on AgentCore</text>
+  <text x="66" y="468" font-size="12" fill="#6E6656">Genuine Strands: real @tool tools over the core, a real agent loop (the model chooses + chains), and two hard guards.</text>
+  <g font-size="13" fill="#14110D">
+    <rect x="66" y="484" width="240" height="86" rx="8" fill="#FBFAF7" stroke="#D8D2C4"/>
+    <text x="80" y="508" font-weight="700">Orchestrator + tools</text>
+    <text x="80" y="528" font-size="11.5" fill="#6E6656">model reads tools, computes</text>
+    <text x="80" y="544" font-size="11.5" fill="#6E6656">nothing itself · auditor +</text>
+    <text x="80" y="560" font-size="11.5" fill="#6E6656">strategist team (opt-in)</text>
+
+    <rect x="320" y="484" width="240" height="86" rx="8" fill="#FBEDEB" stroke="#C0362C"/>
+    <text x="334" y="508" font-weight="700" fill="#C0362C">Two gates</text>
+    <text x="334" y="528" font-size="11.5" fill="#8F2A22">never submit an application</text>
+    <text x="334" y="544" font-size="11.5" fill="#8F2A22">never assert eligibility</text>
+    <text x="334" y="560" font-size="11.5" fill="#8F2A22">(deterministic, below the model)</text>
+
+    <rect x="574" y="484" width="216" height="86" rx="8" fill="#FBFAF7" stroke="#D8D2C4"/>
+    <text x="588" y="508" font-weight="700">Cited-corpus memory</text>
+    <text x="588" y="528" font-size="11.5" fill="#6E6656">Bedrock Knowledge Base:</text>
+    <text x="588" y="544" font-size="11.5" fill="#6E6656">retrieve + quote the real</text>
+    <text x="588" y="560" font-size="11.5" fill="#6E6656">source passage (text only)</text>
+
+    <rect x="804" y="484" width="204" height="86" rx="8" fill="#FBFAF7" stroke="#D8D2C4"/>
+    <text x="818" y="508" font-weight="700">Session + Code Int.</text>
+    <text x="818" y="528" font-size="11.5" fill="#6E6656">profile in agent.state;</text>
+    <text x="818" y="544" font-size="11.5" fill="#6E6656">math run in a visible</text>
+    <text x="818" y="560" font-size="11.5" fill="#6E6656">sandbox = proof surface</text>
+  </g>
+
+  <!-- ============ AUTONOMOUS LOOP ============ -->
+  <rect x="46" y="622" width="620" height="150" rx="12" fill="#F4F6F4" stroke="#2f6b4f" stroke-width="1.5"/>
+  <text x="66" y="648" font-size="13" font-weight="800" letter-spacing="1" fill="#2f6b4f">AUTONOMOUS MONITORING LOOP — runs itself on a schedule</text>
+  <g font-size="12.5" fill="#14110D">
+    <rect x="66" y="662" width="128" height="42" rx="8" fill="#FFFFFF" stroke="#B9Ccbf"/>
+    <text x="80" y="682" font-weight="600">cron / EventBridge</text>
+    <text x="80" y="697" font-size="10.5" fill="#6E6656">tick()</text>
+    <rect x="214" y="662" width="128" height="42" rx="8" fill="#FFFFFF" stroke="#B9Ccbf"/>
+    <text x="228" y="682" font-weight="600">re-fetch draws</text>
+    <text x="228" y="697" font-size="10.5" fill="#6E6656">+ re-score profiles</text>
+    <rect x="362" y="662" width="128" height="42" rx="8" fill="#FFFFFF" stroke="#B9Ccbf"/>
+    <text x="376" y="682" font-weight="600">diff vs snapshot</text>
+    <text x="376" y="697" font-size="10.5" fill="#6E6656">deadlines + cliffs</text>
+    <rect x="510" y="662" width="132" height="42" rx="8" fill="#FFFFFF" stroke="#B9Ccbf"/>
+    <text x="524" y="682" font-weight="600">cited alert</text>
+    <text x="524" y="697" font-size="10.5" fill="#6E6656">change + impact</text>
+    <path d="M194 683 H214" stroke="#2f6b4f" stroke-width="1.6" marker-end="url(#arrowg)"/>
+    <path d="M342 683 H362" stroke="#2f6b4f" stroke-width="1.6" marker-end="url(#arrowg)"/>
+    <path d="M490 683 H510" stroke="#2f6b4f" stroke-width="1.6" marker-end="url(#arrowg)"/>
+    <path d="M576 704 V726 H130 V704" fill="none" stroke="#2f6b4f" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrowg)"/>
+    <text x="300" y="744" font-size="11" fill="#2f6b4f" font-style="italic">the routine, repetitive task — done without being asked</text>
+  </g>
+
+  <!-- ============ SURFACES ============ -->
+  <rect x="686" y="622" width="388" height="150" rx="12" fill="#FFFFFF" stroke="#14110D" stroke-width="1.5"/>
+  <text x="706" y="648" font-size="13" font-weight="800" letter-spacing="1" fill="#14110D">SURFACES</text>
+  <g font-size="13" fill="#14110D">
+    <rect x="706" y="662" width="348" height="48" rx="8" fill="#FBFAF7" stroke="#D8D2C4"/>
+    <text x="720" y="682" font-weight="700">Web dashboard — the proof surface</text>
+    <text x="720" y="699" font-size="11" fill="#6E6656">position panel + interactive time machine (see the cliff)</text>
+    <rect x="706" y="718" width="348" height="42" rx="8" fill="#FBFAF7" stroke="#D8D2C4"/>
+    <text x="720" y="738" font-weight="700">Alerts — the human confirms the final action</text>
+    <text x="720" y="752" font-size="11" fill="#6E6656">the button is where "refuse" lives</text>
+  </g>
+
+  <!-- arrows agent -> loop + surfaces -->
+  <path d="M300 588 V622" stroke="#14110D" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M820 588 V622" stroke="#14110D" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#14110D"/></marker>
+    <marker id="arrowup" markerWidth="9" markerHeight="9" refX="0" refY="3" orient="auto"><path d="M6,0 L0,3 L6,6 Z" fill="#14110D"/></marker>
+    <marker id="arrowg" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2f6b4f"/></marker>
+  </defs>
+</svg>
