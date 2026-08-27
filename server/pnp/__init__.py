@@ -5,6 +5,20 @@ from .bc import (
     SirsResult,
     sirs_bc,
 )
+from .sirs_ingest import (
+    BC_PNP_SIRS_URL,
+    BandReconciliation,
+    BcPnpBrowserFetcher,
+    SirsBandRecord,
+    SirsGridCitation,
+    SirsVerification,
+    build_bc_pnp_browser_fetcher,
+    fetch_bc_pnp_sirs_text,
+    parse_sirs_grid,
+    reconcile_band,
+    reconcile_grid,
+    verify_sirs_grid,
+)
 
 __all__ = [
     "sirs_bc",
@@ -12,4 +26,16 @@ __all__ = [
     "SirsResult",
     "SirsLine",
     "PROVINCIAL_NOMINATION_CRS_BONUS",
+    "BC_PNP_SIRS_URL",
+    "SirsGridCitation",
+    "SirsBandRecord",
+    "BandReconciliation",
+    "SirsVerification",
+    "parse_sirs_grid",
+    "reconcile_band",
+    "reconcile_grid",
+    "verify_sirs_grid",
+    "fetch_bc_pnp_sirs_text",
+    "BcPnpBrowserFetcher",
+    "build_bc_pnp_browser_fetcher",
 ]

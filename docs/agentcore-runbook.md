@@ -161,6 +161,56 @@ built-in).
 
 ---
 
+## 4b. Browser — verifying the BC PNP SIRS bands
+
+Closes the `verified=False` SIRS bands in `server/pnp/bc.py` by fetching the official BC PNP
+SIRS grid and reconciling it against the engine's bands. The pipeline
+(`server/pnp/sirs_ingest.py`) is deterministic and offline-tested; the Browser is only the
+fetcher. Reconciliation reports — it never mutates the engine or fabricates the confirmation.
+
+The AgentCore Browser gives a managed headless browser reachable over a CDP/WebSocket endpoint.
+Import-verified surface (bedrock-agentcore 1.22.0): `BrowserClient.start/stop`,
+`generate_ws_headers()` (CDP endpoint + SigV4 headers), `generate_live_view_url()` (a
+watch-along URL for the demo), and `browser_session(region)`.
+
+Docs-derived, needs a live browser to confirm: the navigation + grid extraction that turns the
+live page into the normalized grid text `parse_sirs_grid` consumes. That is an injected
+`page_reader(client, url) -> str` — a Playwright-over-CDP driver — NOT faked in the repo. Wire
+it at deploy:
+
+```python
+from pnp.sirs_ingest import build_bc_pnp_browser_fetcher, verify_sirs_grid, BC_PNP_SIRS_URL
+
+def page_reader(client, url):
+    # connect Playwright to the CDP endpoint the Browser session exposes, navigate, and
+    # extract the SIRS grid into the [section]\nkey = points INI shape parse_sirs_grid expects.
+    ws_url, headers = client.generate_ws_headers()
+    ...  # drive the page over CDP; return the normalized grid text
+    return grid_text
+
+fetcher = build_bc_pnp_browser_fetcher(region="us-east-1", page_reader=page_reader,
+                                       url=BC_PNP_SIRS_URL)   # starts a Browser session
+verdict = verify_sirs_grid(fetcher=fetcher)
+if verdict.all_verified:
+    # the source matches every in-code band -> a human may flip the verified flags in
+    # pnp/bc.py (and the test_sirs_bands_verified xfail becomes a real pass)
+    ...
+else:
+    print("resolve first:", verdict.mismatches, verdict.as_dict())   # wrong-number-on-stage catch
+```
+
+Confirm `BC_PNP_SIRS_URL` points at the live SIRS points criteria page before relying on it
+(the fetcher takes a `url`, so it is a default, not a hardcode). Offline, `verify_sirs_grid`
+runs against `server/pnp/fixtures/bc_pnp_sirs_grid_sample.txt`, which carries a planted
+discrepancy so it honestly reports `all_verified=False` until the real page confirms the bands.
+
+IAM: `bedrock-agentcore:StartBrowserSession`, `bedrock-agentcore:ConnectBrowserAutomationStream`
+(the CDP stream), `bedrock-agentcore:StopBrowserSession` (and `Create/Get/DeleteBrowser` if you
+provision your own rather than using the built-in `aws.browser.v1`). Point the browser only at
+the public government page — no credentials, no forms.
+
+---
+
 ## 5. Observability — tracing the agent loop
 
 Offline, the loop trace already works (`agent.observability.agent_loop_trace(result)` reads

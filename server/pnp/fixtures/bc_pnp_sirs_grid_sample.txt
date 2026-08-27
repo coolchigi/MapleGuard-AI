@@ -1,0 +1,63 @@
+# STRUCTURAL FIXTURE — not an authoritative source.
+#
+# This is the normalized grid text the AgentCore Browser extraction step is expected to
+# produce from the live BC PNP SIRS page. It exists so parse_sirs_grid + reconcile_grid can be
+# exercised offline. Its numbers MIRROR the current (unverified) in-code bands in pnp/bc.py,
+# EXCEPT for one PLANTED discrepancy (see the wage section) so the reconcile check is proven to
+# actually compare against the source rather than rubber-stamp it.
+#
+# Because of the planted discrepancy, verify_sirs_grid() against this fixture reports
+# all_verified=False with a wage mismatch — the honest offline default. Real verification (and
+# any flip of pnp/bc.py's verified flags) requires fetching the actual BC PNP page; see
+# docs/agentcore-runbook.md.
+
+[work_experience]
+0 = 0
+1 = 8
+2 = 16
+3 = 24
+4 = 32
+5 = 40
+
+[education]
+none-or-less-than-secondary = 0
+secondary = 5
+one-year-post-secondary = 15
+two-year-post-secondary = 20
+bachelors-or-three-year = 27
+two-or-more-certificates = 27
+masters-or-professional = 37
+doctoral = 40
+
+[language]
+4 = 5
+5 = 10
+6 = 15
+7 = 20
+8 = 30
+9 = 35
+10 = 40
+
+[wage]
+0 = 0
+16 = 4
+18 = 8
+20 = 12
+22 = 16
+24 = 20
+26 = 24
+28 = 28
+30 = 32
+32 = 36
+34 = 40
+36 = 44
+40 = 48
+45 = 50
+50 = 53
+70 = 55
+
+[area]
+metro_vancouver = 5
+other_lower_mainland = 10
+rest_of_bc = 15
+northern_bc = 25
