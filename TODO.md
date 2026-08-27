@@ -52,8 +52,10 @@ Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q
 
 ## Frontend (dashboard = proof surface) — Next.js on Vercel
 > Design locked in Claude Design (editorial + passport style, on real engine output): position panel + time machine. Working files in `../design/` (`Main.dc.html`, `TimeMachine.dc.html`, `canvas.json`). Artifact: https://claude.ai/code/artifact/458b1662-5d86-40d7-bd26-f33068094f29. The Next.js build below is still outstanding.
-- [x] Position panel — designed (CRS + cited "why this number" breakdown, IRCC category caps sourced). [ ] build in Next.js.
-- [x] **Time machine** — designed (step-chart trajectory + dated cliffs, −149 test-expiry hero). [ ] build in Next.js (make the scrubber interactive).
+- [x] Position panel — BUILT (`web/`, Next.js): cited CRS breakdown + COMPUTED/NOT ADJUDICATED stamp, static.
+- [x] **Time machine — BUILT and interactive** (`web/`): drag the scrubber across dates (mouse/touch/keyboard) and the CRS number falls at each REAL cliff (496→491→342 test-expiry −149→336→331→325). Hero number, step-line dot, "−N from today", and cliff row all track live. Numbers precomputed from the real engine (`web/scripts/precompute.py` → `demo.json`); nothing Python runs at serve. Static build passes, desktop + mobile verified.
+- [ ] **Deploy to Vercel** — needs the user's Vercel account: `cd web && vercel` (set Root Directory = web), then `vercel --prod`. No env vars. Steps in `web/README.md`.
+- [ ] **What-if scrub (live recompute)** — client-side deterministic engine (Pyodide per ARCHITECTURE.md), so sliders recompute CRS in-browser with no latency. Fast-follow after deploy.
 - [ ] What-if sliders (deterministic recompute).
 - [ ] NOC audit view (duty-by-duty diff + drafted correction).
 - [ ] Cited change-log / inbox.
