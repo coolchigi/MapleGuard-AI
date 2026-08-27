@@ -104,7 +104,7 @@ def test_anchor_lone_bachelor_clb9_transfer_is_25():
     assert s.total == 379
 ```
 
-A related anchor guards the other direction: maxed language on a secondary education still yields zero education skill-transfer points, because language alone does not unlock that group without a post-secondary credential. Both anchors exist so a refactor that "simplifies" the tiers gets caught immediately.
+A related anchor guards the other direction: maxed language on a secondary education still yields zero education skill-transfer points, because language alone does not qualify for that group without a post-secondary credential. Both anchors exist so a refactor that "simplifies" the tiers gets caught immediately.
 
 ## The golden oracle: matching IRCC's own tool
 

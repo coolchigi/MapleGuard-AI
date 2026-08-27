@@ -24,7 +24,7 @@ So `crs(profile, as_of)` is a pure function of the profile and the date. Everyth
 
 **Age brackets.** Age points are flat through the twenties, then step down each year from 30, reaching zero at 45. A birthday that crosses a bracket boundary lowers the score with nothing else changing.
 
-**Test expiry.** Language results are valid for two years. On lapse, the candidate's language points fall away, and so does the skill-transfer that those language levels unlocked. The timeline models this by recomputing the score on a profile whose first-language results have been zeroed:
+**Test expiry.** Language results are valid for two years. On lapse, the candidate's language points fall away, and so does the skill-transfer that those language levels earned. The timeline models this by recomputing the score on a profile whose first-language results have been zeroed:
 
 ```python
 LANGUAGE_TEST_VALIDITY_YEARS = 2
@@ -46,7 +46,7 @@ def _total_on(profile: Profile, d: date, expiry: date | None) -> int:
     return crs(p, d).total
 ```
 
-`_total_on` is the whole trick. Ask for the score on a date, and it decides whether the test has expired by then, swaps in the lapsed profile if so, and calls the ordinary engine. Because zeroing first-language scores also removes their skill-transfer contribution, the drop at expiry is larger than the language points alone. It is the language block plus the transfer points those levels were unlocking.
+`_total_on` is the whole trick. Ask for the score on a date, and it decides whether the test has expired by then, swaps in the lapsed profile if so, and calls the ordinary engine. Because zeroing first-language scores also removes their skill-transfer contribution, the drop at expiry is larger than the language points alone. It is the language block plus the transfer points those levels were earning.
 
 ## A cliff is a one-day difference
 
@@ -125,7 +125,7 @@ age        2026-11-03   -5
 age        2035-11-03  -11     later brackets drop harder
 ```
 
-The test-expiry event is the one that hurts, at −174 for this profile, because it removes the language block and the skill-transfer those levels unlocked at the same time. The exact figure depends on the profile, so it is computed, never assumed. And it sits on a date that is fully knowable in advance, which is the entire point. Two years and a day after a test, a candidate who did nothing wrong can lose enough points to be pulled from the pool. The timeline surfaces that date ahead of time so there is a window to retake before the cliff, not after.
+The test-expiry event is the one that hurts, at −174 for this profile, because it removes the language block and the skill-transfer those levels earned at the same time. The exact figure depends on the profile, so it is computed, never assumed. And it sits on a date that is fully knowable in advance, which is the entire point. Two years and a day after a test, a candidate who did nothing wrong can lose enough points to be pulled from the pool. The timeline surfaces that date ahead of time so there is a window to retake before the cliff, not after.
 
 Everything here is a repeated call to one pure function. The novelty is not a clever forecasting method. It is the recognition that the score already is a function of dates, so the future is not a prediction, it is a recomputation.
 
