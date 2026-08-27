@@ -68,11 +68,11 @@ The layering is deliberate. The model sits *above* the deterministic core and ca
 ## Run the tests
 
 ```bash
-cd agents-for-humans/mapleguard
+cd agents-for-humans/mapleguard/server
 PYTHONPATH=. python3 -m pytest -q
 ```
 
-Current: **100 passed, 16 skipped, 1 xfailed**. The skips are integration tests that need something the offline suite deliberately does without: the Strands SDK installed, a Claude API key, live AWS Bedrock, or the real canada.ca feed. The xfail marks the BC SIRS point bands as not yet line-verified. Everything else, including the whole agent layer, runs offline against injected fakes. The CRS engine passes its golden-oracle case against IRCC's official tool, and the provenance test keeps every published point value stamped with a source.
+Current: **140 passed, 21 skipped, 1 xfailed**. The skips are integration tests that need something the offline suite deliberately does without: the Strands SDK installed, a Claude API key, live AWS Bedrock, or the real canada.ca feed. The xfail marks the BC SIRS point bands as not yet line-verified. Everything else, including the whole agent layer, runs offline against injected fakes. The CRS engine passes its golden-oracle case against IRCC's official tool, and the provenance test keeps every published point value stamped with a source.
 
 ## Honest status
 

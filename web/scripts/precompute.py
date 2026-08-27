@@ -4,9 +4,9 @@ Runs the deterministic core once for the demo profile and writes every number
 the web dashboard shows into src/data/demo.json. The app never computes a CRS
 number itself, it renders these. Re-run after any engine change:
 
-    cd .. && PYTHONPATH=mapleguard python3 mapleguard/.claude/worktrees/<wt>/web/scripts/precompute.py
+    from the repo root:  PYTHONPATH=server python3 web/scripts/precompute.py
 
-or from the mapleguard repo root:  PYTHONPATH=. python3 <path>/precompute.py
+(all Python lives under server/ since the 2026-08-26 restructure)
 
 Every value below comes from crs.crs / crs.deadlines / crs.trajectory. Labels
 are descriptive text; points, subtotals, caps and cliff deltas are the engine's.

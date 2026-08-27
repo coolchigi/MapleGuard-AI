@@ -28,7 +28,7 @@ web/     Next.js dashboard = the proof surface; runs the deterministic math clie
 Split by determinism: instant local recompute in the browser for the proof surface; the server only does what the browser can't (live data, model, state).
 
 ## Rules for your work
-- Match the codebase: typed dataclasses, pure functions where possible, docstrings that state the trust posture. Tests never hit the network (inject fakes); keep `PYTHONPATH=. python3 -m pytest -q` green.
+- Match the codebase: typed dataclasses, pure functions where possible, docstrings that state the trust posture. Tests never hit the network (inject fakes); keep `cd server && PYTHONPATH=. python3 -m pytest -q` green. All Python lives under `server/`; `web/` is the Next.js app; see `docs/session-coordination.md`.
 - Cite every value. Mark unverified data `verified=False` / `needs_manual_check` rather than encoding a guess as fact.
 - Writing (docs, comments, blogs): no em dashes, no semicolons in prose. Specific and honest. No fabricated numbers. No hype buzzwords.
 - Public repo (github.com/coolchigi/MapleGuard-AI): no personal data, no internal competitor strategy.

@@ -2,13 +2,14 @@
 
 Single source of truth for what is done and what is outstanding. Update as you go.
 Spec: `../concept-spec-mapleguard.md` · Why/value: `../why-mapleguard.md`.
-Run tests: `cd agents-for-humans/mapleguard && PYTHONPATH=. python3 -m pytest -q`
+Run tests: `cd agents-for-humans/mapleguard/server && PYTHONPATH=. python3 -m pytest -q`
+Layout: `server/` (all Python: crs pnp paths noc ingest agent tests) · `web/` (Next.js) · `docs/`
 
 **Status 2026-08-26:** 127 passed, 16 skipped (live LLM/AWS), 1 xfail. Agent layer live (genuine Strands: tools + gates + cited-corpus memory + session storage). **Autonomous monitoring loop done** (Feature 4 core: scheduled tick → re-fetch → re-score → cited alert). **Category rules done** (Feature 1: occupation-category eligibility now decides). MIT LICENSE + architecture diagram + 4 technical blogs + session-coordination protocol added. Pushed to github.com/coolchigi/MapleGuard-AI. Pre-mortem priorities: ship a deployed screen (in progress) + the autonomous loop (done) + visible AgentCore (provisioning pending). CRS engine validated against IRCC's official tool (golden oracle 474). Deterministic core complete end to end: `crs` → `trajectory`/`deadlines` → `sirs_bc` → `reachable_paths`. **NOC feature complete**: LLM duty matcher, correction-draft generator, first three BC Tech NOCs, and the NEEDS_VERIFICATION guard, all merged to main. **Frontend designed** (not built): the position panel + time machine are locked in a Claude Design canvas (editorial + passport style, cited show-your-work breakdown, −149 test-expiry cliff) — artifact https://claude.ai/code/artifact/458b1662-5d86-40d7-bd26-f33068094f29. Nothing deployed yet.
 
 > Note: the CRS `engine.py`/`tables.py` were rebuilt on 2026-08-21 after an accidental overwrite; the rebuild passes every prior test including the 474 oracle and the skill-transfer anchors, so it is functionally the restored engine.
 
-> **PENDING (orchestrator, user-approved 2026-08-26):** restructure to `server/` (all Python: crs pnp paths noc ingest agent tests) + `web/` + `docs/`, in ONE pass the moment the AgentCore session merges (the quiet window). `git mv` to preserve history; update all doc/path references + the `PYTHONPATH` test command; then all sessions branch from the new layout. Do NOT start it while a Python builder has an unmerged branch.
+> **DONE 2026-08-26:** restructured to `server/` (all Python) + `web/` + `docs/` via `git mv` (history preserved). Tests run from `server/`. All sessions now branch from this layout.
 
 ---
 
