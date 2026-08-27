@@ -149,3 +149,41 @@ def build_kb_memory(knowledge_base_id: str, name: str = CORPUS_NAME,
         config={"knowledge_base_id": knowledge_base_id, **kb_config},
     )
     return MemoryManager(stores=[store]), store
+
+
+# --------------------------------------------------- AgentCore Memory (per-user profile seam)
+def build_agentcore_session_manager(memory_id: str, session_id: str, actor_id: str,
+                                    region_name: Optional[str] = None,
+                                    top_k: int = 5, retrieval: bool = True, **config: Any):
+    """A Strands `SessionManager` backed by Amazon Bedrock AgentCore Memory.
+
+    This is the longitudinal per-user profile seam: it persists the conversation and state
+    to AgentCore Memory keyed by (actor_id, session_id), and on init restores what that actor
+    had before, so the candidate profile and history follow the user across sessions and
+    across runtime instances. It attaches at `Agent(session_manager=...)` exactly like the
+    file/S3 managers, so nothing in the orchestrator changes.
+
+    Import-verified against bedrock-agentcore 1.22.0:
+    `bedrock_agentcore.memory.integrations.strands.session_manager
+        .AgentCoreMemorySessionManager(AgentCoreMemoryConfig(memory_id=, session_id=,
+        actor_id=, retrieval_config={"/": RetrievalConfig(top_k=...)}), region_name=...)`.
+    The live run needs a provisioned Memory resource (control-plane `create_memory`); see
+    docs/agentcore-runbook.md.
+
+    THE BRIGHT LINE holds here too: the profile AgentCore Memory carries is data the
+    deterministic tools read, never a source the model computes a score from. Memory makes
+    the profile persistent; it never becomes the engine.
+    """
+    from bedrock_agentcore.memory.integrations.strands.session_manager import (
+        AgentCoreMemorySessionManager)
+    from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+
+    cfg_kwargs: dict[str, Any] = {"memory_id": memory_id, "session_id": session_id,
+                                  "actor_id": actor_id, **config}
+    if retrieval:
+        from bedrock_agentcore.memory.integrations.strands.config import RetrievalConfig
+        cfg_kwargs.setdefault("retrieval_config",
+                              {"/": RetrievalConfig(top_k=top_k)})
+    mem_config = AgentCoreMemoryConfig(**cfg_kwargs)
+    kwargs = {"region_name": region_name} if region_name else {}
+    return AgentCoreMemorySessionManager(mem_config, **kwargs)

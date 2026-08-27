@@ -118,12 +118,17 @@ not have one yet, so we should not add one.
 
 ## 3. AgentCore wiring (now that AWS is available)
 
+Status update: the AgentCore client surfaces below were **import-verified** in a real venv
+(`bedrock-agentcore==1.22.0`, `strands-agents==1.54.0`) and wired. See
+`docs/agentcore-runbook.md` for the provisioning steps and the exact verified vs docs-derived
+split.
+
 | Primitive | What it does here | Attaches where | Needs live AWS? | Offline path |
 |---|---|---|---|---|
-| **Runtime** (`BedrockAgentCoreApp`) **[docs-only]** | Hosts the advisor, handles container/scaling/tracing. Already have the guarded entrypoint in `agent/runtime.py`. | wraps `handle()` | yes (deploy) | `handle(payload, model=fake)` runs anywhere |
-| **Code Interpreter** **[docs-only]** | Run the deterministic `crs` / `paths` / `pnp` math inside a visible sandbox, so the number is computed in a reproducible, inspectable environment. | inside the tool wrappers (the tool ships the pure-Python call into the sandbox and returns the typed result) | yes | tool computes in-process locally, identical result |
-| **AgentCore Memory** **[docs-only]** | Longitudinal per-user profile across sessions (the living profile). | alongside / instead of the session manager | yes | `TestMemoryStore` + `FileSessionManager` |
-| **Observability** **[docs-only]** | The proof surface: traces of which tools ran, what they returned, which citations. | agent tracing config | partial | Strands emits local traces/metrics without AWS |
+| **Runtime** (`BedrockAgentCoreApp`) **[verified import]** | Hosts the advisor, handles container/scaling/tracing. Guarded entrypoint in `agent/runtime.py`. | wraps `handle()` | yes (deploy) | `handle(payload, model=fake)` runs anywhere |
+| **Code Interpreter** **[verified import; stream-parse docs-derived]** | Recompute the deterministic `crs` math inside a visible sandbox — the reproducible mirror of the in-process source of truth. `agent/sandbox.py`. | `run_crs_in_sandbox(profile, sandbox=AgentCoreCodeSandbox(...))` | yes (live sandbox) | `LocalSubprocessSandbox` recomputes in a subprocess, cross-checked equal |
+| **AgentCore Memory** **[verified import]** | Longitudinal per-user profile across sessions, keyed by `actor_id`. `AgentCoreMemorySessionManager`. | `Agent(session_manager=...)` via `config.build_session_manager` (`session_backend=agentcore`) | yes | `TestMemoryStore` + `FileSessionManager` |
+| **Observability** **[verified import]** | The proof surface for the loop: which tools ran, cycle count. `agent/observability.py`. | `enable_tracing(...)` + `Agent(trace_attributes=...)`; `agent_loop_trace(result)` | no (console exporter + metrics are local) | same code, console exporter, no AWS |
 
 Code Interpreter, the framing that matters: our core is already trusted library code, so the
 sandbox is **not** a safety mechanism (we are not running model-generated code). Its value is
@@ -136,10 +141,19 @@ What stays testable offline (no regression): every tool, gate, serde path, the f
 orchestrator loop, the agent-as-tool team loop, and `handle()` all run with a fake model and
 no AWS today. The AgentCore primitives are additive wrappers over that same tested core.
 
-Cannot verify here (packages not installed in this env): the exact `bedrock_agentcore` Code
-Interpreter / Memory client surface and `strands_tools.retrieve`. Confirm these against the
-running SDK before wiring. Everything in sections 1 and 2 (memory stores, session managers,
-`Agent` params, `GraphBuilder`) was import-verified in a real 1.53.0 venv.
+Now verified (installed `bedrock-agentcore==1.22.0` + `strands-agents==1.54.0` in a venv and
+imported each): the `bedrock_agentcore` Code Interpreter client
+(`bedrock_agentcore.tools.code_interpreter_client.CodeInterpreter`, `code_session`), the
+Memory client and its Strands session-manager integration
+(`bedrock_agentcore.memory.client.MemoryClient`,
+`...memory.integrations.strands.session_manager.AgentCoreMemorySessionManager`,
+`...config.AgentCoreMemoryConfig` / `RetrievalConfig`), and Strands telemetry
+(`strands.telemetry.StrandsTelemetry`, `AgentResult.metrics`). Still docs-derived and marked
+in code: the Code Interpreter `executeCode` result-stream shape (parsed in
+`AgentCoreCodeSandbox._parse`, modelled on the SDK's `download_file` reader) and the source
+upload — both need a live sandbox to confirm (step 4 of the runbook). `strands_tools.retrieve`
+was not needed: retrieval goes through the `MemoryManager` interface already wired in section
+1. Everything in sections 1 and 2 remains import-verified.
 
 ---
 

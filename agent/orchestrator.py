@@ -110,7 +110,8 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
                        matcher: Any = None, corrector: Any = None,
                        system_prompt: Optional[str] = None,
                        memory: Any = None, session_manager: Any = None,
-                       state: Any = None, corpus: Any = None):
+                       state: Any = None, corpus: Any = None,
+                       trace_attributes: Any = None):
     """Construct the MapleGuard Strands agent.
 
     Args:
@@ -127,6 +128,9 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
         state: Initial per-user state (the profile dict) for `agent.state`.
         corpus: A memory store for re-sourcing NOC audit citations from live retrieval
             (the store behind `memory`). None keeps the seeded citations from noc/data.py.
+        trace_attributes: Optional dict stamped on every OpenTelemetry span the agent emits,
+            so traces are identifiable as MapleGuard's (see agent/observability.py). None
+            leaves the SDK default.
 
     Returns:
         A configured `strands.Agent`. Requires the Strands SDK at call time.
@@ -144,6 +148,8 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
         kwargs["session_manager"] = session_manager
     if state is not None:
         kwargs["state"] = state
+    if trace_attributes is not None:
+        kwargs["trace_attributes"] = trace_attributes
     return Agent(
         model=model,
         tools=tools,
