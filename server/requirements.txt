@@ -1,0 +1,16 @@
+# MapleGuard server runtime dependencies.
+# The deterministic core (crs/pnp/paths/noc/ingest) needs NONE of these — it is pure stdlib
+# Python and its tests run with nothing installed. These are for the API, the model calls, and
+# the AgentCore deploy seams.
+
+# HTTP API
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+
+# Real Claude model for the NOC matcher/corrector (anthropic backend or Bedrock)
+anthropic>=0.39
+
+# Agent layer + AgentCore seams (optional at runtime; imported lazily)
+strands-agents>=1.53
+bedrock-agentcore>=1.20
