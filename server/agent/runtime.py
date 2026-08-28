@@ -66,11 +66,34 @@ def _result_text(result: Any) -> str:
     return str(message)
 
 
-def build_app(model: Any = None):
+def build_orchestrator_from_env(model: Any = None):
+    """Build the orchestrator wired to the deploy backends the environment selects: the cited
+    corpus (Bedrock KB when `MAPLEGUARD_MEMORY_BACKEND=bedrock_kb`, else the offline dev store)
+    and the MapleGuard trace attributes, so a hosted instance retrieves + is traced without any
+    code change. Session persistence per user is applied per request (AgentCore Memory keyed by
+    the caller), not baked into the shared agent, so it is not wired here.
+
+    Falls back to a plain orchestrator if the SDK/config is unavailable, so this never blocks a
+    minimal deploy."""
+    from .observability import DEFAULT_TRACE_ATTRIBUTES
+    kwargs: dict[str, Any] = {"model": model, "trace_attributes": DEFAULT_TRACE_ATTRIBUTES}
+    try:
+        from .config import Deployment, build_memory
+        mem = build_memory(Deployment.from_env())
+        if mem is not None:
+            kwargs["memory"], kwargs["corpus"] = mem[0], mem[1]
+    except Exception:  # pragma: no cover - memory is additive; a failure must not block hosting
+        pass
+    return build_orchestrator(**kwargs)
+
+
+def build_app(model: Any = None, from_env: bool = True):
     """Wrap the entrypoint in a `BedrockAgentCoreApp` for hosting. Requires AgentCore.
 
-    The agent is built once and reused across invocations. Returns the app so the caller
-    (a deploy script or `__main__` below) can `app.run()`.
+    The agent is built once and reused across invocations. `from_env=True` wires the
+    environment-selected backends (see `build_orchestrator_from_env`); pass False (or inject a
+    model) for a bare agent. Returns the app so the caller (`agent/agentcore_app.py`, a deploy
+    script, or `__main__`) can `app.run()`.
     """
     try:
         from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -81,7 +104,7 @@ def build_app(model: Any = None):
         ) from exc
 
     app = BedrockAgentCoreApp()
-    agent = build_orchestrator(model=model)
+    agent = build_orchestrator_from_env(model=model) if from_env else build_orchestrator(model=model)
 
     @app.entrypoint
     def invoke(payload: dict) -> dict:

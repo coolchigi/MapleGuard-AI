@@ -281,3 +281,22 @@ def test_enable_tracing_configures_a_console_exporter():
     from agent.observability import enable_tracing
     telemetry = enable_tracing(console=True)  # real OTEL setup, no AWS
     assert telemetry is not None
+
+
+# --- 6. Runtime deploy wiring (build_orchestrator_from_env + agentcore entrypoint) ----
+def test_build_orchestrator_from_env_stamps_trace_and_builds_offline():
+    pytest.importorskip("strands")
+    from agent.runtime import build_orchestrator_from_env
+    from agent import DEFAULT_TRACE_ATTRIBUTES
+    agent = build_orchestrator_from_env(model=_fake_model([]))
+    assert agent.trace_attributes.get("mapleguard.posture") == "compute-and-refuse"
+    # Default config wires the offline seeded corpus, so the agent gained memory retrieval.
+    assert agent.tool_names  # the deterministic tools are registered
+
+
+def test_agentcore_app_exposes_a_module_level_app():
+    pytest.importorskip("strands")
+    pytest.importorskip("bedrock_agentcore")
+    import agent.agentcore_app as entry
+    assert hasattr(entry, "app")
+    assert hasattr(entry.app, "invoke")  # the @app.entrypoint handler, exposed for testing
