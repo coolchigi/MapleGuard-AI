@@ -20,9 +20,11 @@ from .memory import (build_agentcore_session_manager, build_kb_memory, build_tes
                      noc_seed_passages)
 from .observability import (DEFAULT_TRACE_ATTRIBUTES, agent_loop_trace, enable_tracing,
                             format_loop_trace)
+from .monitor_lambda import build_monitor_deps, lambda_handler
 from .sandbox import (AgentCoreCodeSandbox, LocalSubprocessSandbox, ReproducibleScore,
                       SandboxResult, build_agentcore_sandbox, crs_sandbox_snippet,
                       run_crs_in_sandbox)
+from .stores_aws import DynamoDBProfileStore, DynamoDBSnapshotStore, SnsAlertSink
 from .monitor import (Alert, CollectingAlertSink, FileSnapshotStore, InMemoryProfileStore,
                       InMemorySnapshotStore, MonitorDeps, Snapshot, StoredProfile, TickResult,
                       scheduled_handler, tick)
@@ -84,4 +86,9 @@ __all__ = [
     "FileSnapshotStore",
     "InMemoryProfileStore",
     "CollectingAlertSink",
+    "DynamoDBSnapshotStore",
+    "DynamoDBProfileStore",
+    "SnsAlertSink",
+    "build_monitor_deps",
+    "lambda_handler",
 ]

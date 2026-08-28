@@ -233,20 +233,23 @@ IAM for the runtime role: `logs:PutLogEvents`, `cloudwatch:PutMetricData`, and t
 
 ## 6. AgentCore Runtime — hosting
 
-Package and deploy the entrypoint (`agent/runtime.py::build_app`, marked `@app.entrypoint`).
-Fastest path is the AgentCore starter toolkit:
+The module-level entrypoint is `server/agent/agentcore_app.py` (it exposes `app`, a
+`BedrockAgentCoreApp` with the `@app.entrypoint` handler that `runtime.build_app()` builds,
+wiring the env-selected backends + the two policy gates). `server/Dockerfile` is the explicit
+container. The 3-line deploy from `server/`:
 
 ```bash
-pip install bedrock-agentcore-starter-toolkit
-agentcore configure --entrypoint agent/runtime.py       # detects build_app / @app.entrypoint
-agentcore launch                                        # builds the container, provisions Runtime
-agentcore invoke '{"prompt": "Where do I stand? ..."}'  # smoke test the deployed handler
+agentcore configure --entrypoint agent/agentcore_app.py   # (pip install bedrock-agentcore-starter-toolkit)
+agentcore launch                                          # builds the arm64 container, provisions Runtime
+agentcore invoke '{"prompt": "Where do I stand? Education bachelors, CLB 9, age 30, 1yr Cdn work."}'
 ```
 
-`launch` provisions the container, scaling, and the tracing pipeline (step 5). Set the step
-2/3 env vars on the Runtime configuration so the deployed handler uses the live backends. The
-runtime role needs the union of the IAM actions above plus `bedrock:InvokeModel*` for the
-model in step 1.
+`launch` provisions the container, scaling, and the tracing pipeline (step 5). Prefer the
+starter toolkit's own build; use `server/Dockerfile` directly if you build the image yourself
+(`docker build --platform linux/arm64 -t mapleguard-advisor server/`, serves `/invocations` +
+`/ping` on 8080). Set the step 2/3 env vars on the Runtime configuration so the deployed handler
+uses the live backends. The runtime role needs the union of the IAM actions above plus
+`bedrock:InvokeModel*` for the model in step 1.
 
 ---
 
