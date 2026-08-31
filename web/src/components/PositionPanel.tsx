@@ -1,5 +1,5 @@
 import React from "react";
-import type { Category, DemoData, LineItem } from "@/data/types";
+import type { Category, DashboardData, Lever, LineItem } from "@/data/types";
 import { Cite, Guilloche, Masthead, MrzStrip, Stamp } from "./atoms";
 
 function CategoryHeader({ cat }: { cat: Category }) {
@@ -40,6 +40,19 @@ function Row({ item }: { item: LineItem }) {
   );
 }
 
+function LeverGrid({ levers }: { levers: Lever[] }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0 40px", color: "var(--muted-2)" }}>
+      {levers.map((lv, i) => (
+        <div key={i} className="gc" style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", fontFamily: "var(--serif)", fontSize: 15 }}>
+          <span>{lv.label}</span>
+          <span style={{ fontFamily: "var(--mono)" }}>{lv.points}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CategoryNote({ cat }: { cat: Category }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 16 }}>
@@ -51,12 +64,28 @@ function CategoryNote({ cat }: { cat: Category }) {
   );
 }
 
-export function PositionPanel({ data }: { data: DemoData }) {
-  const { position, lastDraw } = data;
-  const [core, transfer, add] = position.categories;
+/** One category block. The server decides which categories exist (a spouse block appears only
+ *  when the partner is actually scored) and whether each carries scored line items, the levers
+ *  still available, or — for a partly-claimed Additional category — both. */
+function CategoryBlock({ cat, last }: { cat: Category; last?: boolean }) {
+  return (
+    <div style={{ marginBottom: last ? 6 : 24 }}>
+      <CategoryHeader cat={cat} />
+      {cat.items && <div>{cat.items.map((it, i) => <Row key={i} item={it} />)}</div>}
+      {cat.levers && <LeverGrid levers={cat.levers} />}
+      <CategoryNote cat={cat} />
+    </div>
+  );
+}
 
-  const mrz1 = `P<CAN<CRS<${position.total}<<CORE<${position.core}<TRANSFER<${position.skillTransfer}<ADD<${String(position.additional).padStart(3, "0")}<<<<`;
-  const mrz2 = `GEN<${lastDraw.score}<DELTA<${Math.abs(lastDraw.delta)}<<TEST<EXP<270301<<NOT<ADJUDICATED<<`;
+export function PositionPanel({ data }: { data: DashboardData }) {
+  const { position, lastDraw } = data;
+
+  const spouseMrz = position.spouse ? `SPOUSE<${position.spouse}<` : "";
+  const mrz1 = `P<CAN<CRS<${position.total}<<CORE<${position.core}<${spouseMrz}TRANSFER<${position.skillTransfer}<ADD<${String(position.additional).padStart(3, "0")}<<<<`;
+  const expiry = data.trajectory.testExpiry;
+  const expiryMrz = expiry ? `TEST<EXP<${expiry.slice(2).replace(/-/g, "")}<<` : "TEST<EXP<NONE<<";
+  const mrz2 = `GEN<${lastDraw.score}<DELTA<${Math.abs(lastDraw.delta)}<<${expiryMrz}NOT<ADJUDICATED<<`;
 
   return (
     <div className="sheet">
@@ -72,7 +101,14 @@ export function PositionPanel({ data }: { data: DemoData }) {
               COMPREHENSIVE RANKING SYSTEM · /1200
             </div>
             <p style={{ fontFamily: "var(--serif)", fontSize: 25, lineHeight: 1.26, margin: "12px 0 10px", maxWidth: 360 }}>
-              {Math.abs(lastDraw.delta)} points below the last general draw of{" "}
+              {lastDraw.delta === 0 ? (
+                <>Exactly level with the last general draw of{" "}</>
+              ) : (
+                <>
+                  {Math.abs(lastDraw.delta)} points{" "}
+                  {lastDraw.delta > 0 ? "above" : "below"} the last general draw of{" "}
+                </>
+              )}
               <span style={{ color: "var(--maple)", fontWeight: 500 }}>{lastDraw.score}</span>.
             </p>
             <Cite>canada.ca/rounds-of-invitations · {lastDraw.date}</Cite>
@@ -91,33 +127,9 @@ export function PositionPanel({ data }: { data: DemoData }) {
           HOW THIS NUMBER IS BUILT
         </div>
 
-        {/* A · CORE */}
-        <div style={{ marginBottom: 24 }}>
-          <CategoryHeader cat={core} />
-          <div>{core.items!.map((it, i) => <Row key={i} item={it} />)}</div>
-          <CategoryNote cat={core} />
-        </div>
-
-        {/* B · SKILL TRANSFER */}
-        <div style={{ marginBottom: 24 }}>
-          <CategoryHeader cat={transfer} />
-          <div>{transfer.items!.map((it, i) => <Row key={i} item={it} />)}</div>
-          <CategoryNote cat={transfer} />
-        </div>
-
-        {/* C · ADDITIONAL */}
-        <div style={{ marginBottom: 6 }}>
-          <CategoryHeader cat={add} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0 40px", color: "var(--muted-2)" }}>
-            {add.levers!.map((lv, i) => (
-              <div key={i} className="gc" style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", fontFamily: "var(--serif)", fontSize: 15 }}>
-                <span>{lv.label}</span>
-                <span style={{ fontFamily: "var(--mono)" }}>{lv.points}</span>
-              </div>
-            ))}
-          </div>
-          <CategoryNote cat={add} />
-        </div>
+        {position.categories.map((cat, i) => (
+          <CategoryBlock key={cat.code} cat={cat} last={i === position.categories.length - 1} />
+        ))}
 
         <MrzStrip
           line1={mrz1}

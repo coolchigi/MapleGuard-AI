@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "precompute": "cd .. && PYTHONPATH=. python3 web/scripts/precompute.py"
+    "precompute": "cd .. && PYTHONPATH=server python3 web/scripts/precompute.py"
   },
   "dependencies": {
     "next": "^14.2.35",

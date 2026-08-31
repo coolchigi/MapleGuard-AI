@@ -5,6 +5,7 @@
   "position": {
     "total": 496,
     "core": 396,
+    "spouse": 0,
     "skillTransfer": 100,
     "additional": 0,
     "categories": [
@@ -16,17 +17,17 @@
         "items": [
           {
             "label": "Age · 31",
-            "meta": "single-applicant age grid",
-            "points": 99
+            "points": 99,
+            "meta": "single-applicant age grid"
           },
           {
-            "label": "Education · bachelor’s / 3-year",
+            "label": "Education · Bachelor’s / three-year post-secondary",
             "points": 120
           },
           {
             "label": "First language · CLB 9",
-            "meta": "= 31 pts × 4 abilities",
-            "points": 124
+            "points": 124,
+            "meta": "= 31 pts × 4 abilities"
           },
           {
             "label": "Second language · none",
@@ -49,13 +50,13 @@
         "items": [
           {
             "label": "Education × language & Canadian work",
-            "meta": "group capped at 50",
-            "points": 50
+            "points": 50,
+            "meta": "group capped at 50"
           },
           {
-            "label": "Foreign work · 3 yrs × language & Canadian work",
-            "meta": "group capped at 50",
-            "points": 50
+            "label": "Foreign work · 3 years × language & Canadian work",
+            "points": 50,
+            "meta": "group capped at 50"
           }
         ],
         "note": "Three factor-groups, each capped at 50; the total is capped at 100.",
@@ -66,6 +67,8 @@
         "label": "ADDITIONAL",
         "cap": 600,
         "subtotal": 0,
+        "note": "None active on this profile yet — each is the lever that moves the number.",
+        "cite": "canada.ca/crs-criteria",
         "levers": [
           {
             "label": "Provincial nomination",
@@ -83,9 +86,7 @@
             "label": "French-language bonus",
             "points": "+25–50"
           }
-        ],
-        "note": "None active on this profile yet — each is the lever that moves the number.",
-        "cite": "canada.ca/crs-criteria"
+        ]
       }
     ]
   },

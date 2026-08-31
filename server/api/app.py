@@ -11,7 +11,8 @@ no round trip. The server exists for what the browser cannot do: the model-backe
 correction draft (`/audit`, `/draft`), and live data (`/draws`). The compute endpoints
 (`/position`, `/trajectory`, `/reachable-paths`, `/sirs`) are here too as the server-side source
 of truth (and for any non-Pyodide client), taking the profile in the POST body since they
-require input.
+require input. `/dashboard` is the composite of those the Next.js app actually calls: one POST
+of a profile in, the whole rendered document out.
 
 Everything is injectable so the whole API tests offline with fakes and no network:
 `create_app(noc_model=..., draws_fetcher=...)`. With nothing injected it builds the real NOC
@@ -26,9 +27,11 @@ from agent.tools import (audit_reference_letter, compute_crs, configure_deps, cr
                          crs_trajectory, ingest_draws, reachable_paths, sirs_bc)
 from noc import get_occupation
 
+from .dashboard import dashboard_from_dict
 from .model_config import NocModel, build_noc_model
-from .schemas import (AuditRequest, DeadlinesRequest, DraftRequest, DrawsResponse,
-                      PositionRequest, ReachableRequest, SirsRequest, TrajectoryRequest)
+from .schemas import (AuditRequest, DashboardRequest, DeadlinesRequest, DraftRequest,
+                      DrawsResponse, PositionRequest, ReachableRequest, SirsRequest,
+                      TrajectoryRequest)
 
 
 def create_app(noc_model: Optional[NocModel] = None,
@@ -101,6 +104,21 @@ def create_app(noc_model: Optional[NocModel] = None,
     @app.post("/deadlines")
     def deadlines(req: DeadlinesRequest) -> dict:
         return _compute(crs_deadlines, req.profile, as_of=req.as_of)
+
+    @app.post("/dashboard")
+    def dashboard(req: DashboardRequest) -> dict:
+        """Everything the web dashboard renders, in one round trip: the position categories
+        (with their IRCC caps and per-factor line items) and the time-machine trajectory with
+        its dated cliffs. Equivalent to /position + /trajectory + /deadlines, grouped and
+        labelled — and shape-identical to the precomputed web/src/data/demo.json, so the client
+        can fall back to that file with the same type when the server is unreachable.
+
+        Needs a date_of_birth on the profile; a static `age` cannot be run forward over dates
+        and answers 422."""
+        return _compute(dashboard_from_dict, req.profile, as_of=req.as_of,
+                        horizon_years=req.horizon_years,
+                        last_draw_score=req.last_draw_score,
+                        last_draw_date=req.last_draw_date)
 
     @app.post("/sirs")
     def sirs(req: SirsRequest) -> dict:
