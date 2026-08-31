@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import type { Cliff, DemoData } from "@/data/types";
+import type { Cliff, DashboardData } from "@/data/types";
 import { Cite, Guilloche, Masthead, MrzStrip, Stamp } from "./atoms";
 
 // --- chart geometry (viewBox units) ---------------------------------------
@@ -9,8 +9,8 @@ const VB_W = 816;
 const VB_H = 300;
 const X0 = 56;      // left plot edge
 const X1 = 800;     // right plot edge
-const Y_TOP = 50;   // y for CRS 500
-const Y_BOT = 250;  // y for CRS 300 / baseline
+const Y_TOP = 50;   // top of the plot
+const Y_BOT = 250;  // baseline
 const SPAN = X1 - X0;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -24,11 +24,32 @@ function fmt(ms: number): string {
   const dt = new Date(ms);
   return `${MONTHS[dt.getUTCMonth()]} ${dt.getUTCDate()}, ${dt.getUTCFullYear()}`;
 }
-function yFor(crs: number): number {
-  return Math.max(Y_TOP, Math.min(Y_BOT, 550 - crs));
+/**
+ * The CRS window this chart plots.
+ *
+ * It has to be derived, not fixed: a profile holding a provincial nomination sits above 1100 and
+ * one without language results sits near 200, and a hardcoded 300–500 window would flatten both
+ * against an edge — hiding the very cliffs this panel exists to show. Snap to 50s so the axis
+ * labels stay round, keep a 100-point floor so a flat trajectory does not blow up to full scale,
+ * and clamp to the 0–1200 the CRS itself spans.
+ */
+function crsDomain(totals: number[]): { min: number; max: number } {
+  const lo = Math.min(...totals);
+  const hi = Math.max(...totals);
+  const pad = Math.max(20, Math.round((hi - lo) * 0.2));
+  const min = Math.max(0, Math.floor((lo - pad) / 50) * 50);
+  let max = Math.min(1200, Math.ceil((hi + pad) / 50) * 50);
+  if (max - min < 100) max = Math.min(1200, min + 100);
+  return { min, max };
 }
 
-export function TimeMachine({ data }: { data: DemoData }) {
+/** Five evenly spaced gridline values, top to bottom. */
+function ticksFor({ min, max }: { min: number; max: number }): number[] {
+  const step = (max - min) / 4;
+  return [4, 3, 2, 1, 0].map((i) => Math.round(min + step * i));
+}
+
+export function TimeMachine({ data }: { data: DashboardData }) {
   const traj = data.trajectory;
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -38,11 +59,17 @@ export function TimeMachine({ data }: { data: DemoData }) {
     const tEnd = parse(traj.points[traj.points.length - 1].date);
     const totalDays = Math.max(1, Math.round((tEnd - t0) / DAY));
     const xForDay = (day: number) => X0 + (day / totalDays) * SPAN;
+
+    const domain = crsDomain(traj.points.map((p) => p.total));
+    const yFor = (crs: number) =>
+      Y_BOT - ((Math.max(domain.min, Math.min(domain.max, crs)) - domain.min) /
+        (domain.max - domain.min)) * (Y_BOT - Y_TOP);
+
     const pts = traj.points.map((p) => {
       const day = Math.round((parse(p.date) - t0) / DAY);
       return { ...p, day, x: xForDay(day), y: yFor(p.total) };
     });
-    return { t0, totalDays, xForDay, pts };
+    return { t0, totalDays, xForDay, pts, domain, yFor, ticks: ticksFor(domain) };
   }, [traj]);
 
   // scrub position, in day-offset from today
@@ -57,7 +84,7 @@ export function TimeMachine({ data }: { data: DemoData }) {
   }, [geom, day]);
   const currentMs = geom.t0 + day * DAY;
   const scrubX = geom.xForDay(day);
-  const scrubY = yFor(currentCRS);
+  const scrubY = geom.yFor(currentCRS);
   const deltaFromToday = currentCRS - todayCRS;
 
   const setFromClientX = useCallback((clientX: number) => {
@@ -110,8 +137,11 @@ export function TimeMachine({ data }: { data: DemoData }) {
     return reached;
   }, [traj.cliffs, geom.t0, day]);
 
-  const mrz1 = `P<CAN<CRS<${todayCRS}<<CLIFF<270301<LANG<EXP<DROP<${Math.abs(traj.testExpiryDelta ?? 0)}<<`;
-  const mrz2 = `TRAJ<${traj.points.map((p) => p.total).join("<")}<<RETAKE<BY<270301<NOT<ADJUDICATED<<`;
+  // The MRZ carries the expiry date in passport form (YYMMDD); with no test on file there is no
+  // expiry cliff to encode, so the strip says so rather than printing a stale date.
+  const expiryMrz = traj.testExpiry ? traj.testExpiry.slice(2).replace(/-/g, "") : "NONE";
+  const mrz1 = `P<CAN<CRS<${todayCRS}<<CLIFF<${expiryMrz}<LANG<EXP<DROP<${Math.abs(traj.testExpiryDelta ?? 0)}<<`;
+  const mrz2 = `TRAJ<${traj.points.map((p) => p.total).join("<")}<<RETAKE<BY<${expiryMrz}<NOT<ADJUDICATED<<`;
 
   return (
     <div className="sheet">
@@ -140,9 +170,21 @@ export function TimeMachine({ data }: { data: DemoData }) {
               CRS TRAJECTORY · TODAY → NEXT 3 YEARS
             </div>
             <p style={{ fontFamily: "var(--serif)", fontSize: 25, lineHeight: 1.26, margin: "12px 0 10px", maxWidth: 380 }}>
-              Today’s number, then dated cliffs. The steepest is a{" "}
-              <span style={{ color: "var(--maple)", fontWeight: 500 }}>{traj.testExpiryDelta}</span>{" "}
-              the day your language test expires.
+              {traj.testExpiryDelta !== null ? (
+                <>
+                  Today’s number, then dated cliffs. The steepest is a{" "}
+                  <span style={{ color: "var(--maple)", fontWeight: 500 }}>{traj.testExpiryDelta}</span>{" "}
+                  the day your language test expires.
+                </>
+              ) : traj.cliffs.length > 0 ? (
+                <>
+                  Today’s number, then{" "}
+                  <span style={{ color: "var(--maple)", fontWeight: 500 }}>{traj.cliffs.length}</span>{" "}
+                  dated age cliffs. Add a language-test date to see the expiry cliff too.
+                </>
+              ) : (
+                <>Today’s number holds flat across this horizon — no dated cliff falls inside it.</>
+              )}
             </p>
             <Cite>canada.ca/crs-criteria · grids run forward over dates</Cite>
           </div>
@@ -174,20 +216,17 @@ export function TimeMachine({ data }: { data: DemoData }) {
             onPointerUp={onUp}
             onPointerLeave={onUp}
           >
-            {/* y grid + labels */}
+            {/* y grid + labels, over the derived CRS window */}
             <g stroke="var(--hair)" strokeWidth="1">
-              <line x1={X0} y1="50" x2={X1} y2="50" />
-              <line x1={X0} y1="100" x2={X1} y2="100" />
-              <line x1={X0} y1="150" x2={X1} y2="150" />
-              <line x1={X0} y1="200" x2={X1} y2="200" />
+              {geom.ticks.slice(0, 4).map((t) => (
+                <line key={t} x1={X0} y1={geom.yFor(t)} x2={X1} y2={geom.yFor(t)} />
+              ))}
             </g>
-            <line x1={X0} y1="250" x2={X1} y2="250" stroke="var(--ink)" strokeWidth="1.5" />
+            <line x1={X0} y1={Y_BOT} x2={X1} y2={Y_BOT} stroke="var(--ink)" strokeWidth="1.5" />
             <g fill="var(--muted-2)" fontSize="10" textAnchor="end">
-              <text x="46" y="53">500</text>
-              <text x="46" y="103">450</text>
-              <text x="46" y="153">400</text>
-              <text x="46" y="203">350</text>
-              <text x="46" y="253">300</text>
+              {geom.ticks.map((t) => (
+                <text key={t} x="46" y={geom.yFor(t) + 3}>{t}</text>
+              ))}
             </g>
             <text x="20" y="150" fill="var(--muted-2)" fontSize="9" letterSpacing="0.14em" textAnchor="middle" transform="rotate(-90 20 150)">CRS · /1200</text>
 
@@ -276,23 +315,25 @@ export function TimeMachine({ data }: { data: DemoData }) {
           ))}
         </div>
 
-        {/* ACTION CALLOUT */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 22, padding: "16px 18px", border: "2px solid var(--maple)", borderRadius: 8 }}>
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--maple)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
-          </svg>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.1em", color: "var(--maple)" }}>
-              RETAKE BEFORE {(traj.testExpiryHuman ?? "").toUpperCase()}
+        {/* ACTION CALLOUT — only when a language test is on file to expire */}
+        {traj.testExpiry && (
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 22, padding: "16px 18px", border: "2px solid var(--maple)", borderRadius: 8 }}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--maple)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+            </svg>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.1em", color: "var(--maple)" }}>
+                RETAKE BEFORE {(traj.testExpiryHuman ?? "").toUpperCase()}
+              </div>
+              <div style={{ fontFamily: "var(--serif)", fontSize: 15, color: "var(--ink-body)", marginTop: 2 }}>
+                A fresh language result before the expiry date holds the {traj.testExpiryDelta} cliff off entirely — the single highest-leverage move on this timeline.
+              </div>
             </div>
-            <div style={{ fontFamily: "var(--serif)", fontSize: 15, color: "var(--ink-body)", marginTop: 2 }}>
-              A fresh language result before the expiry date holds the {traj.testExpiryDelta} cliff off entirely — the single highest-leverage move on this timeline.
+            <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted-2)", textAlign: "right", whiteSpace: "nowrap" }}>
+              {traj.daysToExpiry} days<br />from today
             </div>
           </div>
-          <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted-2)", textAlign: "right", whiteSpace: "nowrap" }}>
-            {traj.daysToExpiry} days<br />from today
-          </div>
-        </div>
+        )}
 
         <MrzStrip
           line1={mrz1}

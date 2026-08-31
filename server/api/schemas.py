@@ -41,6 +41,19 @@ class DeadlinesRequest(BaseModel):
     as_of: Optional[str] = None
 
 
+class DashboardRequest(BaseModel):
+    """The whole dashboard in one call: position categories + the time-machine trajectory."""
+    profile: dict[str, Any] = Field(..., description="Candidate profile; needs date_of_birth.")
+    as_of: Optional[str] = Field(default=None, description="ISO 'YYYY-MM-DD'; defaults to today.")
+    horizon_years: int = Field(default=3, ge=1, le=30,
+                              description="How far forward the trajectory runs from as_of.")
+    last_draw_score: Optional[int] = Field(
+        default=None, ge=0, le=1200,
+        description="CRS cutoff of the most recent general round, for the 'points below' line. "
+                    "Omit to use the server's stated constant; fetch live values from /draws.")
+    last_draw_date: Optional[str] = Field(default=None, description="ISO date of that round.")
+
+
 class SirsRequest(BaseModel):
     profile: dict[str, Any]
     offer: Optional[dict[str, Any]] = Field(
