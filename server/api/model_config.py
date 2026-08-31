@@ -25,9 +25,17 @@ from typing import Any, Optional
 
 from noc import DEFAULT_MODEL, LetterCorrector, LLMDutyMatcher
 
-# Env override for the model id (defaults to noc's DEFAULT_MODEL).
+# Env override for the model id (defaults per backend, see below).
 MODEL_ENV = "MAPLEGUARD_NOC_MODEL"
 BACKEND_ENV = "MAPLEGUARD_NOC_BACKEND"
+
+# The default backend and model. We default to Bedrock (one AWS credential covers the agent
+# runtime and this model call) with Sonnet 4.5 — the low-cost choice for this per-letter
+# extraction, deliberately not an Opus-tier model. DEFAULT_BEDROCK_MODEL is the cross-region
+# inference-profile id: it must match the one enabled on your Bedrock model-access page, so
+# adjust the date stamp or region prefix (or set MAPLEGUARD_NOC_MODEL) if yours differs.
+DEFAULT_BACKEND = "bedrock"
+DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 
 @dataclass(frozen=True)
@@ -61,8 +69,8 @@ def build_noc_model(env: Optional[dict] = None) -> NocModel:
     NocModel with `configured=False` and a reason, so the API can answer 503 with a clear
     message instead of crashing at startup."""
     e = os.environ if env is None else env
-    model = e.get(MODEL_ENV, DEFAULT_MODEL)
-    backend = e.get(BACKEND_ENV, "auto").lower()
+    override = e.get(MODEL_ENV)
+    backend = e.get(BACKEND_ENV, DEFAULT_BACKEND).lower()
 
     if backend == "auto":
         if e.get("ANTHROPIC_API_KEY"):
@@ -70,8 +78,12 @@ def build_noc_model(env: Optional[dict] = None) -> NocModel:
         elif _looks_like_bedrock(e):
             backend = "bedrock"
         else:
-            return NocModel(None, None, False, "auto", model,
+            return NocModel(None, None, False, "auto", override or DEFAULT_BEDROCK_MODEL,
                             "no ANTHROPIC_API_KEY and no AWS credentials detected")
+
+    # Model default depends on the resolved backend: Bedrock needs the inference-profile id,
+    # the Anthropic API needs the plain id (noc's DEFAULT_MODEL, also Sonnet 4.5).
+    model = override or (DEFAULT_BEDROCK_MODEL if backend == "bedrock" else DEFAULT_MODEL)
 
     if backend == "anthropic" and not e.get("ANTHROPIC_API_KEY"):
         return NocModel(None, None, False, backend, model, "ANTHROPIC_API_KEY is not set")

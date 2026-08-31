@@ -17,10 +17,10 @@ from typing import Dict, Optional, Tuple
 
 from .models import NocOccupation
 
-# Default to the most capable current model. This is a per-letter extraction, so a cheaper
-# model (Sonnet / Haiku) would likely do fine at a fraction of the cost. Override via the
-# constructor's ``model`` argument once that trade-off is decided.
-DEFAULT_MODEL = "claude-opus-5"
+# This is a per-letter extraction, so we deliberately use a low-cost model rather than an
+# Opus-tier one. Sonnet 4.5 is the default; override via the constructor's ``model`` argument.
+# (The API layer pins the Bedrock inference-profile form of this in api/model_config.py.)
+DEFAULT_MODEL = "claude-sonnet-4-5"
 
 _SYSTEM = (
     "You pre-audit a Canadian immigration reference letter against a National Occupational "
