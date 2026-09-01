@@ -45,10 +45,23 @@ logger = logging.getLogger("mapleguard.monitor")
 # --------------------------------------------------------------------- data model
 @dataclass(frozen=True)
 class StoredProfile:
-    """A monitored candidate: an id, the CRS profile dict, and an optional BC job offer."""
+    """A monitored candidate: an id, the CRS profile dict (the same shape `crs.Profile`
+    consumes, via serde), and an optional BC job offer. `to_dict`/`from_dict` are the one
+    serialization used by every profile store (file, DynamoDB), so the stored shape is
+    identical across backends."""
     id: str
     profile: dict
     bc_offer: Optional[dict] = None
+
+    def to_dict(self) -> dict:
+        d = {"id": self.id, "profile": self.profile}
+        if self.bc_offer is not None:
+            d["bc_offer"] = self.bc_offer
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "StoredProfile":
+        return cls(id=data["id"], profile=data["profile"], bc_offer=data.get("bc_offer"))
 
 
 @dataclass(frozen=True)
@@ -109,6 +122,15 @@ class ProfileStore(Protocol):
     def list_profiles(self) -> list[StoredProfile]: ...
 
 
+class WritableProfileStore(ProfileStore, Protocol):
+    """A profile store the intake path writes to. The monitor only needs `list_profiles`
+    (read); the API's save-a-profile endpoint needs `put`/`get`. The file store (dev) and the
+    DynamoDB store (deploy) both satisfy this, so a profile saved through the API is the same
+    profile the monitor lists — one store, two readers/writers, no hand-seeded items."""
+    def put(self, profile: StoredProfile) -> None: ...
+    def get(self, profile_id: str) -> Optional[StoredProfile]: ...
+
+
 class AlertSink(Protocol):
     def emit(self, alert: Alert) -> None: ...
 
@@ -144,12 +166,63 @@ class FileSnapshotStore:
 
 
 class InMemoryProfileStore:
-    """The monitored profiles, in memory. Dev/test default (DynamoDB holds them in deploy)."""
-    def __init__(self, profiles: list[StoredProfile]):
-        self._profiles = list(profiles)
+    """The monitored profiles, in memory. Dev/test default (DynamoDB holds them in deploy).
+    Writable: `put` upserts by id so a test can exercise the same save->list path the API uses."""
+    def __init__(self, profiles: Optional[list[StoredProfile]] = None):
+        self._profiles: dict[str, StoredProfile] = {p.id: p for p in (profiles or [])}
 
     def list_profiles(self) -> list[StoredProfile]:
-        return list(self._profiles)
+        return list(self._profiles.values())
+
+    def put(self, profile: StoredProfile) -> None:
+        self._profiles[profile.id] = profile
+
+    def get(self, profile_id: str) -> Optional[StoredProfile]:
+        return self._profiles.get(profile_id)
+
+
+class FileProfileStore:
+    """The monitored profiles, one JSON file per id under a directory. Dev/demo persistence with
+    no AWS, and the shared store for a locally-run API + a locally-run monitor: the API writes a
+    profile here, the monitor reads the same directory. The stored shape is `StoredProfile.to_dict`,
+    identical to the DynamoDB item's `data`, so swapping file->DynamoDB is config only."""
+    def __init__(self, directory: str):
+        self._dir = directory
+
+    def _path(self, profile_id: str) -> str:
+        import os
+        # Keep the id filesystem-safe without losing round-trip fidelity (the id also lives in
+        # the file body, which is the source of truth on read).
+        safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in profile_id) or "_"
+        return os.path.join(self._dir, f"{safe}.json")
+
+    def _index(self) -> dict[str, str]:
+        import os
+        return {} if not os.path.isdir(self._dir) else {
+            name: os.path.join(self._dir, name)
+            for name in os.listdir(self._dir) if name.endswith(".json")
+        }
+
+    def list_profiles(self) -> list[StoredProfile]:
+        profiles = []
+        for path in self._index().values():
+            with open(path) as f:
+                profiles.append(StoredProfile.from_dict(json.load(f)))
+        return profiles
+
+    def put(self, profile: StoredProfile) -> None:
+        import os
+        os.makedirs(self._dir, exist_ok=True)
+        with open(self._path(profile.id), "w") as f:
+            json.dump(profile.to_dict(), f)
+
+    def get(self, profile_id: str) -> Optional[StoredProfile]:
+        import os
+        path = self._path(profile_id)
+        if not os.path.exists(path):
+            return None
+        with open(path) as f:
+            return StoredProfile.from_dict(json.load(f))
 
 
 class CollectingAlertSink:

@@ -27,3 +27,15 @@ variable "rounds_url" {
   type        = string
   default     = ""
 }
+
+variable "api_enabled" {
+  description = "Deploy the FastAPI API as a Lambda + Function URL (the web frontend's backend). Requires `make api-package` first (aws-up runs it)."
+  type        = bool
+  default     = true
+}
+
+variable "bedrock_model_id" {
+  description = "Pinned Bedrock inference-profile id the API Lambda invokes for /audit. Matches agent.config.DEFAULT_BEDROCK_MODEL_ID."
+  type        = string
+  default     = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+}

@@ -149,6 +149,32 @@ export async function fetchDashboard(
   return data;
 }
 
+export type SaveProfileResponse = { id: string; monitored: boolean };
+
+/**
+ * The intake call: persist a profile into the monitored set so the autonomous monitor watches
+ * it and alerts when a draw or rule moves this candidate. It takes the SAME `Profile` the form
+ * already builds and `/dashboard` scores — no shape change — wrapped as `{ profile }` exactly
+ * like `DashboardRequest`. Pass `id` to update an existing profile; omit it for a new one.
+ * Throws `ApiError` (a rejected profile is a real 4xx, not a reason to fall back).
+ */
+export async function saveProfile(
+  profile: Profile,
+  options: {
+    id?: string;
+    bcOffer?: Record<string, unknown>;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  } = {},
+): Promise<SaveProfileResponse> {
+  const { id, bcOffer, ...fetchOpts } = options;
+  return postJson<SaveProfileResponse>(
+    "/profiles",
+    { profile, ...(id ? { id } : {}), ...(bcOffer ? { bc_offer: bcOffer } : {}) },
+    fetchOpts,
+  );
+}
+
 export type HealthResponse = {
   status: string;
   noc_model: { configured: boolean; backend: string; model: string; detail: string };

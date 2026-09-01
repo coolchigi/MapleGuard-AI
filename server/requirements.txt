@@ -7,6 +7,8 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic>=2.6
+# ASGI->Lambda adapter for the API Lambda / Function URL deploy (api/lambda_handler.py).
+mangum>=0.17
 
 # Real Claude model for the NOC matcher/corrector (anthropic backend or Bedrock)
 anthropic>=0.39

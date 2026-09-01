@@ -27,3 +27,8 @@ output "schedule" {
   description = "The EventBridge schedule expression driving the monitor."
   value       = aws_cloudwatch_event_rule.monitor.schedule_expression
 }
+
+output "api_url" {
+  description = "Public HTTPS URL of the FastAPI API Lambda. Set web NEXT_PUBLIC_API_BASE_URL to this."
+  value       = var.api_enabled ? aws_lambda_function_url.api[0].function_url : ""
+}

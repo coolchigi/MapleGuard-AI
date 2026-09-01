@@ -429,6 +429,19 @@ def test_shared_deploy_pieces_pin_model_and_bedrock_noc_clients():
     assert isinstance(pieces["corrector"]._client, anthropic.AnthropicBedrock)
 
 
+def test_deploy_build_threads_the_cited_corpus_into_the_audit_tool():
+    # P0-3 (non-decorative KB): the hosted build wires the memory store as the audit tool's
+    # citation corpus, so audit_reference_letter re-sources NOC gaps from the KB in deploy
+    # (MAPLEGUARD_MEMORY_BACKEND=bedrock_kb) exactly as it re-sources from the seeded store in dev.
+    pytest.importorskip("strands")
+    import agent.tools as tools
+    from agent.memory import search_sync
+    from agent.runtime import build_orchestrator_from_env
+    build_orchestrator_from_env(model=_fake_model([]))  # default env -> dev seeded corpus
+    assert tools._DEPS.corpus is not None                # the corpus reached the tool layer
+    assert search_sync(tools._DEPS.corpus, "NOC 21234 web developer")  # and it really retrieves
+
+
 # --- 8. Trust posture: the model cannot force eligibility through the tool (P2-7) ------
 def test_reachable_paths_tool_ignores_model_supplied_eligible_override():
     from agent import serde
