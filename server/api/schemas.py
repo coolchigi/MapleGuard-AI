@@ -71,3 +71,13 @@ class DrawsResponse(BaseModel):
     """Documentation-only shape for /draws (the endpoint returns the tool dict directly)."""
     draws: list[dict[str, Any]]
     needs_manual_check: list[dict[str, Any]]
+
+
+class ProfileSaveRequest(BaseModel):
+    """Save a candidate profile into the monitored set — the intake path that puts a profile in
+    front of the autonomous monitor. `profile` is the same shape `/position` takes (validated by
+    serde). `id` is a stable per-user id (generated if omitted); re-saving the same id updates it."""
+    profile: dict[str, Any] = Field(..., description="Candidate profile (validated by serde).")
+    id: Optional[str] = Field(default=None, description="Stable profile id; generated if omitted.")
+    bc_offer: Optional[dict[str, Any]] = Field(
+        default=None, description="Optional BC job offer {hourly_wage, area, is_tech_exempt}.")

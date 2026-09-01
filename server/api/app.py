@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from agent import serde
 from agent.tools import (audit_reference_letter, compute_crs, configure_deps, crs_deadlines,
                          crs_trajectory, ingest_draws, reachable_paths, sirs_bc)
 from noc import get_occupation
@@ -30,21 +31,27 @@ from noc import get_occupation
 from .dashboard import dashboard_from_dict
 from .model_config import NocModel, build_noc_model
 from .schemas import (AuditRequest, DashboardRequest, DeadlinesRequest, DraftRequest,
-                      DrawsResponse, PositionRequest, ReachableRequest, SirsRequest,
-                      TrajectoryRequest)
+                      DrawsResponse, PositionRequest, ProfileSaveRequest, ReachableRequest,
+                      SirsRequest, TrajectoryRequest)
 
 
 def create_app(noc_model: Optional[NocModel] = None,
                draws_fetcher: Optional[Any] = None,
-               corpus: Any = None):
+               corpus: Any = None,
+               profile_store: Any = None):
     """Build the FastAPI app. `noc_model` injects matcher+corrector (a fake in tests); if None,
     it is built from the environment. `draws_fetcher` is a callable returning the raw IRCC
     rounds JSON for `/draws` (injected in tests; defaults to the live fetch). `corpus` is an
-    optional memory store to re-source NOC audit citations from live retrieval."""
+    optional memory store to re-source NOC audit citations from live retrieval. `profile_store`
+    is the monitored-profile store `/profiles` writes (injected in tests; defaults to the
+    env-selected store — file locally, DynamoDB in deploy — the SAME store the monitor lists)."""
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
 
     model = noc_model if noc_model is not None else build_noc_model()
+    if profile_store is None:
+        from agent.config import Deployment, build_profile_store
+        profile_store = build_profile_store(Deployment.from_env())
     # Point the model-backed tools at these clients (and the optional citation corpus). Set once
     # at startup; the deterministic tools ignore it.
     configure_deps(matcher=model.matcher, corrector=model.corrector, corpus=corpus)
@@ -91,6 +98,35 @@ def create_app(noc_model: Optional[NocModel] = None,
         _require_model()
         _occupation_or_404(req.noc_code)
         return _compute(draft_from_tool, req.letter_text, req.noc_code, req.supporting_facts)
+
+    # ---------------------------------------------------------------- intake (monitored set)
+    @app.post("/profiles")
+    def save_profile(req: ProfileSaveRequest) -> dict:
+        """Persist a profile into the monitored set — this is the intake that puts a candidate in
+        front of the autonomous monitor. The profile is validated through the SAME serde path as
+        /position and /dashboard (a malformed profile answers 422), then stored under a stable id
+        (generated if omitted). The monitor lists this exact store, so a saved profile is watched
+        with no hand-seeding."""
+        import uuid
+
+        from agent.monitor import StoredProfile
+        _compute(serde.profile_from_dict, req.profile)  # validate; raises -> 422
+        profile_id = req.id or uuid.uuid4().hex
+        profile_store.put(StoredProfile(id=profile_id, profile=req.profile, bc_offer=req.bc_offer))
+        return {"id": profile_id, "monitored": True}
+
+    @app.get("/profiles")
+    def list_profiles() -> dict:
+        """The ids in the monitored set (ids only — the profiles carry personal data; fetch one by
+        id). This is what the monitor scans each tick."""
+        return {"profiles": [{"id": p.id} for p in profile_store.list_profiles()]}
+
+    @app.get("/profiles/{profile_id}")
+    def get_profile(profile_id: str) -> dict:
+        sp = profile_store.get(profile_id)
+        if sp is None:
+            raise HTTPException(status_code=404, detail=f"no monitored profile {profile_id!r}")
+        return sp.to_dict()
 
     # ---------------------------------------------------------------- deterministic compute
     @app.post("/position")
