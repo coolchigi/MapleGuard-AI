@@ -1,16 +1,24 @@
 """Policy gates — deterministic guards that sit BELOW the model.
 
 MapleGuard's trust posture has two non-negotiable rules. The system prompt tells the
-model to obey them, but a prompt is a request, not a guarantee. These functions make the
-guarantee: they are pure, deterministic checks that run in code, so a rule violation is
-blocked whether or not the model cooperated. This is the Cedar/Policy layer, expressed as
-plain Python so it runs and is testable with no AWS and no network.
+model to obey them, but a prompt is a request, not a guarantee. These functions add a
+deterministic layer below the model, expressed as plain Python so it runs and is testable
+with no AWS and no network. The two gates differ in how strong that guarantee is, and we
+are precise about it rather than overselling:
 
-  never-submit             No tool may file, submit, or lodge a government application.
-                           The human submits, always. We prepare up to the button.
-  never-assert-eligibility No message may state an immigration eligibility verdict
-                           ("you are eligible / you qualify for PR"). We compute cited
-                           facts and comparisons; the officer decides eligibility.
+  never-submit             A HARD guarantee. It gates tool calls by NAME against an
+                           exhaustive submission-intent pattern, and the orchestrator also
+                           refuses at build time to register any tool the gate would block.
+                           Because we register no submission tool and the gate is closed over
+                           tool names, the model cannot file, submit, or lodge an application.
+                           The human submits, always; we prepare up to the button.
+
+  never-assert-eligibility A COARSE, best-effort backstop over free-form model text, NOT a
+                           guarantee. The primary control is the system prompt; a production
+                           deployment layers Bedrock Guardrails on top (not yet provisioned in
+                           infra/). This regex catches the blunt verdicts ("you are eligible /
+                           you qualify for PR") but a determined paraphrase can slip past it.
+                           Treat it as defence in depth, not a proof.
 
 Scope note on never-assert: the engine legitimately computes derivable, cited facts such
 as "you clear this cutoff" or "French NCLC 7 met". Those are comparisons against published

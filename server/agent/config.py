@@ -25,6 +25,61 @@ import os
 from dataclasses import dataclass
 from typing import Any, Optional
 
+# --------------------------------------------------------------- the ONE Bedrock model id
+# Every model call the deployed system makes resolves to this single Bedrock inference-profile
+# id, so the hosted Strands orchestrator, the NOC matcher/corrector inside the agent, and the
+# FastAPI NOC path all speak to the same model. Pinning it removes the two ways the model could
+# drift: Strands' changing default (Agent(model=None)) and a mismatched per-path id. Override
+# with MAPLEGUARD_BEDROCK_MODEL. The default is a us cross-region inference profile; it must be
+# enabled on the account's Bedrock model-access page (see docs/agentcore-runbook.md).
+DEFAULT_BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+BEDROCK_MODEL_ENV = "MAPLEGUARD_BEDROCK_MODEL"
+BEDROCK_REGION_ENV = "MAPLEGUARD_BEDROCK_REGION"
+DEFAULT_BEDROCK_REGION = "us-east-1"
+
+
+def bedrock_model_id(env: Optional[dict] = None) -> str:
+    """The pinned Bedrock model id for this deployment (env override, else the default)."""
+    e = os.environ if env is None else env
+    return e.get(BEDROCK_MODEL_ENV) or DEFAULT_BEDROCK_MODEL_ID
+
+
+def bedrock_region(env: Optional[dict] = None) -> str:
+    """The AWS region for Bedrock calls. MAPLEGUARD_BEDROCK_REGION wins, then the standard AWS
+    env, then a coherent default for the us inference profile."""
+    e = os.environ if env is None else env
+    return (e.get(BEDROCK_REGION_ENV) or e.get("AWS_REGION") or e.get("AWS_DEFAULT_REGION")
+            or DEFAULT_BEDROCK_REGION)
+
+
+def build_bedrock_model(env: Optional[dict] = None):
+    """A Strands `BedrockModel` pinned to the MapleGuard model id and region. This is what the
+    hosted orchestrator runs on, so first invoke never falls back to Strands' shifting default
+    (which would ask Bedrock for a model the account may not have enabled). Requires strands.
+    """
+    from strands.models.bedrock import BedrockModel
+    return BedrockModel(model_id=bedrock_model_id(env), region_name=bedrock_region(env))
+
+
+def build_bedrock_noc_clients(env: Optional[dict] = None):
+    """The NOC matcher + corrector wired to Bedrock (`anthropic.AnthropicBedrock`), pinned to the
+    same model id, so audit_reference_letter / draft_corrected_letter work on the deployed agent
+    with only AWS credentials and no ANTHROPIC_API_KEY.
+
+    Returns (matcher, corrector), or (None, None) if the `anthropic` package is absent — in which
+    case the agent still builds and the two model-backed tools report their own clear error if
+    called. `AnthropicBedrock` requires an explicit region, so we always pass the resolved one.
+    """
+    from noc import LLMDutyMatcher, LetterCorrector
+    try:
+        import anthropic
+    except ImportError:  # pragma: no cover - anthropic is a deploy dep; absence is non-fatal
+        return None, None
+    client = anthropic.AnthropicBedrock(aws_region=bedrock_region(env))
+    model = bedrock_model_id(env)
+    return (LLMDutyMatcher(model=model, client=client),
+            LetterCorrector(model=model, client=client))
+
 
 @dataclass(frozen=True)
 class Deployment:

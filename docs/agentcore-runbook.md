@@ -26,17 +26,49 @@ AgentCore (e.g. `us-east-1`, `us-west-2`). Set `export AWS_REGION=us-east-1` fir
 
 ## 1. Bedrock model access
 
-Enable the model the orchestrator runs on, in your region, in the Bedrock console
-(Model access -> request the target model). Then pick a concrete model when you build the
-orchestrator, instead of the deploy-time default:
+The deployed system pins ONE Bedrock model id, shared by the hosted Strands orchestrator, the
+in-agent NOC matcher/corrector, and the FastAPI NOC path — so there is a single model to enable
+and a single id to keep in sync. It lives in `agent/config.py`:
 
 ```python
-from strands.models import BedrockModel
-from agent import build_orchestrator
-agent = build_orchestrator(model=BedrockModel(model_id="<enabled-model-id>"))
+DEFAULT_BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"   # a us cross-region
+                                                                            # inference profile
 ```
 
-No env var. This is the only step required before anything else works live.
+Enable that model in your region in the Bedrock console (Model access -> request Claude Sonnet
+4.5). If the id you enabled differs (different region prefix or date stamp), override it — one
+env var flips every path at once:
+
+```bash
+export MAPLEGUARD_BEDROCK_MODEL=<your enabled inference-profile id>
+export MAPLEGUARD_BEDROCK_REGION=$AWS_REGION            # else AWS_REGION / us-east-1
+```
+
+`runtime.build_app()` constructs `BedrockModel(model_id=<pinned>, region_name=<pinned>)` for the
+orchestrator (never `Agent(model=None)`, which would fall back to Strands' shifting default and
+risk AccessDenied on the first invoke), and `anthropic.AnthropicBedrock` for the NOC tools —
+both on this id, both authenticating with the runtime role's AWS credentials, no
+`ANTHROPIC_API_KEY` needed. This is the only step required before anything else works live.
+
+**Runtime-role IAM** (the single most common first-invoke failure is a missing grant here):
+
+```json
+{
+  "Effect": "Allow",
+  "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+  "Resource": [
+    "arn:aws:bedrock:*:<acct>:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+  ]
+}
+```
+
+A `us.` cross-region inference profile needs BOTH the inference-profile ARN AND the
+foundation-model ARN in every region the profile can route to (us-east-1/us-east-2/us-west-2),
+or Bedrock denies the call at routing time. If you override the model id, update these ARNs to
+match.
 
 ---
 
@@ -144,7 +176,7 @@ defaults to it. Then run the proof surface against the live sandbox:
 
 ```python
 from agent.sandbox import build_agentcore_sandbox, run_crs_in_sandbox
-sandbox = build_agentcore_sandbox(region="us-east-1")   # starts a session, uploads crs/ + agent/serde.py
+sandbox = build_agentcore_sandbox(region="us-east-1")   # starts a session, uploads crs/ + paths/ + pnp/ + serde
 proof = run_crs_in_sandbox(profile_dict, as_of="2026-08-25", sandbox=sandbox)
 assert proof.matches            # sandbox total == in-process source of truth
 print(proof.sandbox_total, proof.snippet)
@@ -215,8 +247,11 @@ the public government page — no credentials, no forms.
 
 Offline, the loop trace already works (`agent.observability.agent_loop_trace(result)` reads
 the metrics every `AgentResult` carries; `enable_tracing(console=True)` prints real OTEL
-spans). On AgentCore Runtime, export to the platform collector so traces land in CloudWatch
-GenAI Observability:
+spans). On AgentCore Runtime, spans export to the platform collector so they land in CloudWatch
+GenAI Observability — and this is now wired automatically: `runtime.build_app()` calls
+`enable_tracing(console=False)` (which uses the `OTEL_EXPORTER_OTLP_ENDPOINT` AgentCore injects)
+and stamps `DEFAULT_TRACE_ATTRIBUTES` on every agent it builds. No manual call is needed in the
+deployed handler; the snippet below is only for a custom host:
 
 ```python
 from agent.observability import enable_tracing, DEFAULT_TRACE_ATTRIBUTES
@@ -248,8 +283,20 @@ agentcore invoke '{"prompt": "Where do I stand? Education bachelors, CLB 9, age 
 starter toolkit's own build; use `server/Dockerfile` directly if you build the image yourself
 (`docker build --platform linux/arm64 -t mapleguard-advisor server/`, serves `/invocations` +
 `/ping` on 8080). Set the step 2/3 env vars on the Runtime configuration so the deployed handler
-uses the live backends. The runtime role needs the union of the IAM actions above plus
-`bedrock:InvokeModel*` for the model in step 1.
+uses the live backends.
+
+The handler builds a FRESH agent per invocation, keyed by the AgentCore session id (the
+`X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header the entrypoint reads via its `context`
+arg), so conversation state never bleeds between callers; with `MAPLEGUARD_SESSION_BACKEND=agentcore`
+(step 3b) that per-session key also restores the caller's longitudinal profile. Pass a stable
+session id per user on `agentcore invoke` to get multi-turn continuity.
+
+**Runtime-role IAM** = the union of every step's grants: `bedrock:InvokeModel` +
+`InvokeModelWithResponseStream` for the pinned model (step 1 — required; the NOC audit/draft
+tools call the same model through Bedrock, so this one grant covers the orchestrator AND the NOC
+tools), the KB `bedrock:Retrieve`/`GetKnowledgeBase` (step 2), the session backend's grants
+(step 3), and the CloudWatch/X-Ray OTLP permissions (step 5). The `agentcore` CLI creates and
+attaches this role — verify it carries the step-1 policy above before the first invoke.
 
 ---
 
@@ -257,6 +304,7 @@ uses the live backends. The runtime role needs the union of the IAM actions abov
 
 | Var | Values | Activates |
 |---|---|---|
+| `MAPLEGUARD_BEDROCK_MODEL` / `MAPLEGUARD_BEDROCK_REGION` | id / region | override the pinned model (step 1) |
 | `MAPLEGUARD_MEMORY_BACKEND` | `dev` \| `bedrock_kb` \| `none` | KB corpus (step 2) |
 | `MAPLEGUARD_KB_ID` / `MAPLEGUARD_KB_REGION` | ids | KB corpus |
 | `MAPLEGUARD_SESSION_BACKEND` | `file` \| `s3` \| `agentcore` \| `none` | sessions (step 3) |

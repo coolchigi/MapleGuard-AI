@@ -157,10 +157,12 @@ def reachable_paths(profile: ProfileInput, draws: list[DrawInput], as_of: Option
 
     Args:
         profile: The candidate profile.
-        draws: Live draws, each {kind, name, cutoff, date, source, category?,
-            eligible_override?, provenance?}. kind is 'general' | 'category' | 'pnp_bc'.
-            Pass the draws straight from ingest_draws to carry each cutoff's full provenance
-            (round number, per-round page, fetch date) through to the result.
+        draws: Live draws, each {kind, name, cutoff, date, source, category?, provenance?}.
+            kind is 'general' | 'category' | 'pnp_bc'. Pass the draws straight from ingest_draws
+            to carry each cutoff's full provenance (round number, per-round page, fetch date)
+            through to the result. Any `eligible_override` in a draw is ignored here: the model
+            may not assert a candidate's eligibility for a category draw; the engine decides that
+            deterministically or reports it as needs_eligibility_check.
         as_of: Optional ISO 'YYYY-MM-DD' to evaluate as of.
         bc_offer: Optional BC job offer used to score pnp_bc draws.
 
@@ -170,7 +172,12 @@ def reachable_paths(profile: ProfileInput, draws: list[DrawInput], as_of: Option
     """
     from paths import reachable_paths as _reachable_paths
     p = serde.profile_from_dict(profile)
-    typed_draws = [serde.draw_from_dict(d) for d in draws]
+    # Trust posture: the model must never assert eligibility. `eligible_override` lets a caller
+    # force a category draw's eligibility, so it is stripped from model-supplied draws here — the
+    # engine determines eligibility or flags it needs_eligibility_check. (The pure `paths` API
+    # still honours it for the deterministic ingest path, which the model does not author.)
+    typed_draws = [serde.draw_from_dict({k: v for k, v in d.items() if k != "eligible_override"})
+                   for d in draws]
     result = _reachable_paths(p, typed_draws, serde._parse_date(as_of),
                               serde.bc_offer_from_dict(bc_offer))
     out = serde.reachability_to_dict(result)

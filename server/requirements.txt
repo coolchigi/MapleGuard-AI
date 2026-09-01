@@ -11,6 +11,9 @@ pydantic>=2.6
 # Real Claude model for the NOC matcher/corrector (anthropic backend or Bedrock)
 anthropic>=0.39
 
-# Agent layer + AgentCore seams (optional at runtime; imported lazily)
-strands-agents>=1.53
-bedrock-agentcore>=1.20
+# Agent layer + AgentCore seams (optional at runtime; imported lazily).
+# Pinned exactly: Strands' default Bedrock model id changes across releases, and the deployed
+# orchestrator now pins its own model id (agent.config.DEFAULT_BEDROCK_MODEL_ID) — pinning the
+# SDK too keeps the hook/session/telemetry APIs we build against from shifting under us.
+strands-agents==1.54.0
+bedrock-agentcore==1.22.0

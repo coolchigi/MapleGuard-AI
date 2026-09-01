@@ -102,8 +102,55 @@ def test_agentcore_sandbox_parses_the_execute_code_stream_shape():
     proof = run_crs_in_sandbox(PROFILE, as_of="2026-08-25", sandbox=sandbox)
     assert proof.via == "agentcore"
     assert proof.matches is True and proof.sandbox_total == proof.in_process["total"]
-    # prepare() uploaded the deterministic engine into the sandbox before running.
-    assert "crs/__init__.py" in client.uploaded and "agent/serde.py" in client.uploaded
+    # prepare() uploaded the FULL deterministic engine (not just the __init__s) before running,
+    # plus serde behind a lightweight agent package stub.
+    assert {"crs/__init__.py", "crs/engine.py", "paths/reach.py", "pnp/bc.py",
+            "agent/__init__.py", "agent/serde.py"} <= set(client.uploaded)
+
+
+class _IsolatedCodeInterpreterClient:
+    """Runs the snippet with ONLY the uploaded files reachable — a fresh tmpdir on the path and
+    the repo root deliberately absent — so the test fails if the uploaded set is not import-closed.
+    This is the real managed-sandbox condition; the repo-rooted subprocess mirror masks it (which
+    is exactly how the earlier partial upload passed tests while being broken in the cloud)."""
+    def __init__(self):
+        import tempfile
+        self._dir = tempfile.mkdtemp(prefix="mg_ci_")
+        self.uploaded = {}
+
+    def upload_file(self, path, content, description=""):
+        import os
+        full = os.path.join(self._dir, path)
+        os.makedirs(os.path.dirname(full) or self._dir, exist_ok=True)
+        with open(full, "w") as f:
+            f.write(content)
+        self.uploaded[path] = content
+        return {"ok": True}
+
+    def execute_code(self, code, language="python"):
+        import os
+        import subprocess
+        import sys
+        env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+        env["PYTHONPATH"] = self._dir  # ONLY the uploaded files; no repo root
+        proc = subprocess.run([sys.executable, "-c", code], cwd=self._dir, env=env,
+                              capture_output=True, text=True, timeout=30)
+        return {"stream": [{"result": {
+            "structuredContent": {"stdout": proc.stdout, "stderr": proc.stderr,
+                                  "exitCode": proc.returncode},
+            "content": [], "isError": proc.returncode != 0,
+        }}]}
+
+
+def test_agentcore_sandbox_uploads_an_import_closed_set():
+    # The snippet must import and recompute the CRS using ONLY the uploaded files. If the set were
+    # incomplete (the P0-3 bug), `from agent import serde` / `from crs import crs` would ImportError
+    # in the isolated interpreter and matches would be False.
+    client = _IsolatedCodeInterpreterClient()
+    sandbox = AgentCoreCodeSandbox(client, upload_source=True)
+    proof = run_crs_in_sandbox(PROFILE, as_of="2026-08-25", sandbox=sandbox)
+    assert proof.matches is True, f"isolated sandbox did not reproduce the score:\n{proof.stdout}"
+    assert proof.sandbox_total == proof.in_process["total"]
 
 
 def test_agentcore_parse_reads_text_content_blocks_too():
@@ -300,3 +347,105 @@ def test_agentcore_app_exposes_a_module_level_app():
     import agent.agentcore_app as entry
     assert hasattr(entry, "app")
     assert hasattr(entry.app, "invoke")  # the @app.entrypoint handler, exposed for testing
+
+
+def test_build_app_builds_a_fresh_agent_per_invocation_no_state_bleed(monkeypatch):
+    # P1-5: the deployed handler must not reuse one Agent across callers (that leaks one caller's
+    # conversation into the next). We prove it by recording how many messages the model sees on
+    # each invocation: a fresh agent per call sees exactly the one new user turn (1), a shared
+    # agent would see the accumulated history (3 on the second call).
+    strands_models = pytest.importorskip("strands.models")
+    pytest.importorskip("bedrock_agentcore")
+    # Disable session persistence so the test is hermetic (no on-disk session carried between
+    # runs); the no-bleed property comes from the fresh agent per call, not the session backend.
+    monkeypatch.setenv("MAPLEGUARD_SESSION_BACKEND", "none")
+    from agent.runtime import build_app
+
+    seen_message_counts = []
+
+    class _RecordingModel(strands_models.Model):
+        def get_config(self): return {}
+        def update_config(self, **kwargs): pass
+        async def structured_output(self, output_model, prompt, system_prompt=None, **kwargs):
+            yield {"output": None}
+        async def stream(self, messages, tool_specs=None, system_prompt=None,
+                         tool_choice=None, **kwargs):
+            seen_message_counts.append(len(messages))
+            yield {"messageStart": {"role": "assistant"}}
+            yield {"contentBlockStart": {"start": {}}}
+            yield {"contentBlockDelta": {"delta": {"text": "Here is your cited position."}}}
+            yield {"contentBlockStop": {}}
+            yield {"messageStop": {"stopReason": "end_turn"}}
+
+    app = build_app(model=_RecordingModel(), from_env=False)
+    app.invoke({"prompt": "Where do I stand?", "session_id": "caller-A"})
+    app.invoke({"prompt": "And now?", "session_id": "caller-B"})
+    assert seen_message_counts == [1, 1]  # each invocation started clean; no bleed
+
+
+def test_agentcore_entrypoint_takes_a_context_arg():
+    # The AgentCore starter toolkit passes RequestContext as a 2nd param named exactly "context"
+    # (BedrockAgentCoreApp._takes_context). Per-caller session isolation depends on it.
+    import inspect
+    pytest.importorskip("strands")
+    pytest.importorskip("bedrock_agentcore")
+    import agent.agentcore_app as entry
+    params = list(inspect.signature(entry.app.invoke).parameters.keys())
+    assert len(params) >= 2 and params[1] == "context"
+
+
+# --- 7. The pinned Bedrock model + Bedrock-backed NOC tools (deploy correctness) -------
+def test_hosted_orchestrator_model_is_pinned_not_the_sdk_default():
+    pytest.importorskip("strands")
+    from agent.config import DEFAULT_BEDROCK_MODEL_ID, build_bedrock_model
+    # No env override -> the ONE pinned MapleGuard id, never Strands' shifting default.
+    model = build_bedrock_model(env={})
+    assert model.config["model_id"] == DEFAULT_BEDROCK_MODEL_ID
+    # And the env override is honoured, so an operator can point at their enabled profile.
+    override = build_bedrock_model(env={"MAPLEGUARD_BEDROCK_MODEL": "us.anthropic.custom-v1:0"})
+    assert override.config["model_id"] == "us.anthropic.custom-v1:0"
+
+
+def test_agent_noc_tools_use_bedrock_not_the_anthropic_public_api():
+    anthropic = pytest.importorskip("anthropic")
+    from agent.config import DEFAULT_BEDROCK_MODEL_ID, build_bedrock_noc_clients
+    matcher, corrector = build_bedrock_noc_clients(env={"MAPLEGUARD_BEDROCK_REGION": "us-east-1"})
+    assert matcher is not None and corrector is not None
+    # The agent-path NOC clients target Bedrock (AWS creds), NOT api.anthropic.com (which needs
+    # ANTHROPIC_API_KEY the AgentCore container does not have). This is the P0-2 fix.
+    assert isinstance(matcher._client, anthropic.AnthropicBedrock)
+    assert isinstance(corrector._client, anthropic.AnthropicBedrock)
+    assert matcher._model == DEFAULT_BEDROCK_MODEL_ID == corrector._model
+
+
+def test_shared_deploy_pieces_pin_model_and_bedrock_noc_clients():
+    anthropic = pytest.importorskip("anthropic")
+    pytest.importorskip("strands")
+    from agent.runtime import _shared_deploy_pieces
+    from agent.config import DEFAULT_BEDROCK_MODEL_ID
+    pieces = _shared_deploy_pieces()  # model=None -> pins the Bedrock model
+    assert pieces["model"].config["model_id"] == DEFAULT_BEDROCK_MODEL_ID
+    assert isinstance(pieces["matcher"]._client, anthropic.AnthropicBedrock)
+    assert isinstance(pieces["corrector"]._client, anthropic.AnthropicBedrock)
+
+
+# --- 8. Trust posture: the model cannot force eligibility through the tool (P2-7) ------
+def test_reachable_paths_tool_ignores_model_supplied_eligible_override():
+    from agent import serde
+    from agent.tools import reachable_paths as reachable_tool
+    draw = {"kind": "category", "name": "Unrecognized category draw", "cutoff": 300,
+            "date": "2026-08-01", "source": "https://example.gc.ca/round",
+            "eligible_override": True}
+    out = reachable_tool(PROFILE, [draw], as_of="2026-08-25")
+    reached = [p["draw"]["name"] for p in out["reachable"]]
+    flagged = [p["draw"]["name"] for p in out["needs_eligibility_check"]]
+    # eligible_override stripped: an unrecognized category is honestly flagged, never forced.
+    assert draw["name"] in flagged and draw["name"] not in reached
+
+    # Contrast: the pure paths API (the deterministic ingest path, which the model does not
+    # author) still honours the override — proving the tool boundary is where the lever is denied.
+    from datetime import date
+    from paths import reachable_paths as reachable_pure
+    p = serde.profile_from_dict(PROFILE)
+    pure = reachable_pure(p, [serde.draw_from_dict(draw)], date(2026, 8, 25))
+    assert any(r.draw.name == draw["name"] for r in pure.reachable)
