@@ -30,15 +30,16 @@ from noc import get_occupation
 
 from .dashboard import dashboard_from_dict
 from .model_config import NocModel, build_noc_model
-from .schemas import (AuditRequest, DashboardRequest, DeadlinesRequest, DraftRequest,
+from .schemas import (AuditRequest, BriefRequest, DashboardRequest, DeadlinesRequest, DraftRequest,
                       DrawsResponse, PositionRequest, ProfileSaveRequest, ReachableRequest,
-                      SirsRequest, TrajectoryRequest)
+                      ReferenceLetter, SirsRequest, TrajectoryRequest)
 
 
 def create_app(noc_model: Optional[NocModel] = None,
                draws_fetcher: Optional[Any] = None,
                corpus: Any = None,
-               profile_store: Any = None):
+               profile_store: Any = None,
+               brief_narrator: Any = None):
     """Build the FastAPI app. `noc_model` injects matcher+corrector (a fake in tests); if None,
     it is built from the environment. `draws_fetcher` is a callable returning the raw IRCC
     rounds JSON for `/draws` (injected in tests; defaults to the live fetch). `corpus` is an
@@ -99,6 +100,21 @@ def create_app(noc_model: Optional[NocModel] = None,
         _occupation_or_404(req.noc_code)
         return _compute(draft_from_tool, req.letter_text, req.noc_code, req.supporting_facts)
 
+    @app.post("/brief")
+    def brief(req: BriefRequest) -> dict:
+        """The consultant brief: CRS position, dated cliffs, ranked next moves, and (when a letter
+        is supplied) the cited NOC gaps + the drafted correction — one document to hand a consultant.
+        Every number/citation is from the deterministic core; the cover prose (if a narrator is
+        configured) is screened for eligibility verdicts. Never asserts eligibility, never submits."""
+        from .brief import assemble_brief
+        if req.noc_code and req.letter_text:
+            _require_model()                 # the letter audit/draft need the model
+            _occupation_or_404(req.noc_code)
+        return _compute(assemble_brief, req.profile, noc_code=req.noc_code,
+                        letter_text=req.letter_text, draws=req.draws,
+                        supporting_facts=req.supporting_facts, as_of=req.as_of,
+                        narrator=brief_narrator)
+
     # ---------------------------------------------------------------- intake (monitored set)
     @app.post("/profiles")
     def save_profile(req: ProfileSaveRequest) -> dict:
@@ -112,8 +128,23 @@ def create_app(noc_model: Optional[NocModel] = None,
         from agent.monitor import StoredProfile
         _compute(serde.profile_from_dict, req.profile)  # validate; raises -> 422
         profile_id = req.id or uuid.uuid4().hex
-        profile_store.put(StoredProfile(id=profile_id, profile=req.profile, bc_offer=req.bc_offer))
+        letter = req.reference_letter.model_dump() if req.reference_letter is not None else None
+        profile_store.put(StoredProfile(id=profile_id, profile=req.profile, bc_offer=req.bc_offer,
+                                        reference_letter=letter))
         return {"id": profile_id, "monitored": True}
+
+    @app.put("/profiles/{profile_id}/letter")
+    def attach_letter(profile_id: str, req: ReferenceLetter) -> dict:
+        """Store an employer reference letter on an existing profile, so a NOC-type policy change
+        (e.g. the NOC 2016->TEER 2021 reclassification) can re-audit it. PII note: the letter is
+        stored unscrubbed until Guardrails PII redaction is provisioned (flagged, not faked)."""
+        from agent.monitor import StoredProfile
+        sp = profile_store.get(profile_id)
+        if sp is None:
+            raise HTTPException(status_code=404, detail=f"no monitored profile {profile_id!r}")
+        profile_store.put(StoredProfile(id=sp.id, profile=sp.profile, bc_offer=sp.bc_offer,
+                                        reference_letter=req.model_dump()))
+        return {"id": profile_id, "letter_stored": True, "noc_code": req.noc_code}
 
     @app.get("/profiles")
     def list_profiles() -> dict:

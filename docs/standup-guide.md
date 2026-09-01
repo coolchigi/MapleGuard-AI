@@ -7,16 +7,25 @@ Legend: **LOCAL** (no AWS) · **CREDS** (needs AWS identity, no charge) · **$**
 
 ## The product loop
 
-A user saves a profile → the deterministic engine computes their CRS/SIRS position → the
-autonomous monitor watches draws (and, when provisioned, rules/NOC) and computes the **delta**,
-then per stored profile decides whether the change actually **moves that person** (relevance
-filter) and alerts with the answer — the shortest move or the cliff, not "the page changed" →
+A user saves a profile (with an optional reference letter) → the deterministic engine computes
+their CRS/SIRS position → the autonomous monitor watches draws AND policy changes, computes the
+**delta**, then per stored profile decides whether the change actually **moves that person**
+(relevance filter) and alerts with the answer — the shortest move, the cliff, or (on a NOC
+reclassification) the reference-letter gaps against the new TEER duties — not "the page changed" →
 the Bedrock Knowledge Base supplies the cited corpus behind NOC gaps. Determinism below the
-model throughout: the model routes, reads, and explains; it never computes a number or asserts
-eligibility.
+model throughout: the model routes, reads, classifies, and explains; it never computes a number or
+asserts eligibility.
 
-The whole loop now runs on ONE profile store: `POST /profiles` (intake) writes it, the monitor
-lists it — no hand-seeded DynamoDB items.
+Two watches now: draws, and **policy changes** — `classify_policy_change` has a model extract
+{change_type, affected_noc_codes, effective_date} from an IRCC update, then a deterministic
+validator drops anything malformed; a validated NOC change re-audits each affected profile's stored
+letter (reusing the real audit path) and cites the gaps. And `POST /brief` assembles the whole thing
+— CRS position, dated next moves, cited letter gaps, the drafted correction — into one document to
+hand a consultant; every number/citation is the core's, only the cover prose is model-written (and
+screened for eligibility verdicts).
+
+The whole loop runs on ONE profile store: `POST /profiles` (intake, letter optional) writes it, the
+monitor lists it — no hand-seeded DynamoDB items.
 
 ## Deploy status — what's wired vs what needs live creds
 

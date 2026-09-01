@@ -409,13 +409,15 @@ def test_hosted_orchestrator_model_is_pinned_not_the_sdk_default():
 def test_agent_noc_tools_use_bedrock_not_the_anthropic_public_api():
     anthropic = pytest.importorskip("anthropic")
     from agent.config import DEFAULT_BEDROCK_MODEL_ID, build_bedrock_noc_clients
-    matcher, corrector = build_bedrock_noc_clients(env={"MAPLEGUARD_BEDROCK_REGION": "us-east-1"})
-    assert matcher is not None and corrector is not None
-    # The agent-path NOC clients target Bedrock (AWS creds), NOT api.anthropic.com (which needs
+    matcher, corrector, classifier = build_bedrock_noc_clients(
+        env={"MAPLEGUARD_BEDROCK_REGION": "us-east-1"})
+    assert matcher is not None and corrector is not None and classifier is not None
+    # The agent-path model clients target Bedrock (AWS creds), NOT api.anthropic.com (which needs
     # ANTHROPIC_API_KEY the AgentCore container does not have). This is the P0-2 fix.
     assert isinstance(matcher._client, anthropic.AnthropicBedrock)
     assert isinstance(corrector._client, anthropic.AnthropicBedrock)
-    assert matcher._model == DEFAULT_BEDROCK_MODEL_ID == corrector._model
+    assert isinstance(classifier._client, anthropic.AnthropicBedrock)
+    assert matcher._model == DEFAULT_BEDROCK_MODEL_ID == corrector._model == classifier._model
 
 
 def test_shared_deploy_pieces_pin_model_and_bedrock_noc_clients():

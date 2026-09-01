@@ -51,6 +51,7 @@ class ToolDeps:
     matcher: Any = None       # noc.audit.DutyMatcher — proposes duty->sentence alignment
     corrector: Any = None     # noc.draft.LetterCorrector — drafts the corrected letter
     corpus: Any = None        # memory store for citation retrieval; None = seed citations
+    classifier: Any = None    # ingest.PolicyChangeClassifier — extracts an IRCC policy change
 
     def get_matcher(self):
         if self.matcher is None:
@@ -62,6 +63,12 @@ class ToolDeps:
             self.corrector = LetterCorrector()
         return self.corrector
 
+    def get_classifier(self):
+        if self.classifier is None:
+            from ingest import PolicyChangeClassifier
+            self.classifier = PolicyChangeClassifier()
+        return self.classifier
+
 
 # Module-level deps the tools read. `configure_deps` swaps them (the orchestrator injects a
 # shared instance; tests inject fakes). Kept as a singleton so the `@tool` wrappers, whose
@@ -69,11 +76,12 @@ class ToolDeps:
 _DEPS = ToolDeps()
 
 
-def configure_deps(matcher: Any = None, corrector: Any = None, corpus: Any = None) -> ToolDeps:
+def configure_deps(matcher: Any = None, corrector: Any = None, corpus: Any = None,
+                   classifier: Any = None) -> ToolDeps:
     """Point the model-backed tools at specific clients and the citation corpus (orchestrator
     wiring / tests)."""
     global _DEPS
-    _DEPS = ToolDeps(matcher=matcher, corrector=corrector, corpus=corpus)
+    _DEPS = ToolDeps(matcher=matcher, corrector=corrector, corpus=corpus, classifier=classifier)
     return _DEPS
 
 
@@ -272,6 +280,31 @@ def draft_corrected_letter(letter_text: str, noc_code: str,
     }
 
 
+@tool
+def classify_policy_change(update_text: str, source_url: str) -> dict:
+    """Classify a single IRCC policy update into a validated, cited change record — the trigger the
+    monitor routes on (e.g. a NOC 2016->TEER 2021 reclassification, or a CRS-weight change).
+
+    Hybrid, determinism below the model: a model EXTRACTS {change_type, affected_noc_codes,
+    affected_components, effective_date} from the update text, then a deterministic validator checks
+    it against a strict schema and DROPS the extraction if anything is malformed (unknown type, a
+    NOC change naming no valid 5-digit code, an unparseable date, a missing source). The model never
+    computes a number; an unvalidated extraction is dropped, never patched.
+
+    Args:
+        update_text: The IRCC policy-update text (already fetched; this tool does no network I/O).
+        source_url: The citation URL the update was fetched from (required; no uncited change).
+
+    Returns:
+        {"change": <validated change dict> | None, "validated": bool}. When `validated` is False the
+        model's extraction did not pass the schema and was dropped.
+    """
+    from ingest import validate_policy_change
+    raw = _DEPS.get_classifier()(update_text)
+    change = validate_policy_change(raw, source_url)
+    return {"change": change.to_dict() if change else None, "validated": change is not None}
+
+
 # Tool groupings. POSITION_TOOLS is the deterministic position engine (the strategist's
 # kit); NOC_TOOLS is the reference-letter work (the document auditor's kit). The flat
 # MAPLEGUARD_TOOLS is their union, handed to the single orchestrator. The two subsets exist
@@ -289,4 +322,8 @@ NOC_TOOLS = [
     audit_reference_letter,
     draft_corrected_letter,
 ]
-MAPLEGUARD_TOOLS = POSITION_TOOLS + NOC_TOOLS
+# Policy-watch tools: classify an IRCC update into a validated, routable change.
+POLICY_TOOLS = [
+    classify_policy_change,
+]
+MAPLEGUARD_TOOLS = POSITION_TOOLS + NOC_TOOLS + POLICY_TOOLS

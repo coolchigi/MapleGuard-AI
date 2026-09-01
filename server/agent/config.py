@@ -65,23 +65,26 @@ def build_bedrock_model(env: Optional[dict] = None):
 
 
 def build_bedrock_noc_clients(env: Optional[dict] = None):
-    """The NOC matcher + corrector wired to Bedrock (`anthropic.AnthropicBedrock`), pinned to the
-    same model id, so audit_reference_letter / draft_corrected_letter work on the deployed agent
-    with only AWS credentials and no ANTHROPIC_API_KEY.
+    """The model-backed NOC/policy clients wired to Bedrock (`anthropic.AnthropicBedrock`), pinned
+    to the same model id, so audit_reference_letter / draft_corrected_letter / classify_policy_change
+    work on the deployed agent with only AWS credentials and no ANTHROPIC_API_KEY.
 
-    Returns (matcher, corrector), or (None, None) if the `anthropic` package is absent — in which
-    case the agent still builds and the two model-backed tools report their own clear error if
-    called. `AnthropicBedrock` requires an explicit region, so we always pass the resolved one.
+    Returns (matcher, corrector, classifier), or (None, None, None) if the `anthropic` package is
+    absent — in which case the agent still builds and the model-backed tools report their own clear
+    error if called. `AnthropicBedrock` requires an explicit region, so we always pass the resolved
+    one.
     """
+    from ingest import PolicyChangeClassifier
     from noc import LLMDutyMatcher, LetterCorrector
     try:
         import anthropic
     except ImportError:  # pragma: no cover - anthropic is a deploy dep; absence is non-fatal
-        return None, None
+        return None, None, None
     client = anthropic.AnthropicBedrock(aws_region=bedrock_region(env))
     model = bedrock_model_id(env)
     return (LLMDutyMatcher(model=model, client=client),
-            LetterCorrector(model=model, client=client))
+            LetterCorrector(model=model, client=client),
+            PolicyChangeClassifier(model=model, client=client))
 
 
 @dataclass(frozen=True)

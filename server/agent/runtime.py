@@ -97,7 +97,7 @@ def _shared_deploy_pieces(model: Any = None) -> dict:
     # with only AWS credentials (no ANTHROPIC_API_KEY). (None, None) if anthropic is absent.
     try:
         from .config import build_bedrock_noc_clients
-        pieces["matcher"], pieces["corrector"] = build_bedrock_noc_clients()
+        pieces["matcher"], pieces["corrector"], pieces["classifier"] = build_bedrock_noc_clients()
     except Exception:  # pragma: no cover - additive; a failure must not block hosting
         logger.warning("could not build Bedrock NOC clients; audit/draft will report unconfigured")
 
