@@ -56,8 +56,12 @@ def build_monitor_deps(env: Optional[dict] = None, *,
         source_url = e.get("MAPLEGUARD_ROUNDS_URL") or _default_source_url()
 
     if profiles is None:
-        from .stores_aws import DynamoDBProfileStore
-        profiles = DynamoDBProfileStore(_require(e, "MAPLEGUARD_PROFILES_TABLE"), region=region)
+        # The deploy monitor needs a durable store (a Lambda file store is ephemeral), so require
+        # the table, then build via the shared config seam — the SAME store the API's
+        # save-a-profile endpoint writes, so the monitor watches exactly the intake profiles.
+        _require(e, "MAPLEGUARD_PROFILES_TABLE")
+        from .config import Deployment, build_profile_store
+        profiles = build_profile_store(Deployment.from_env(e))
     if snapshots is None:
         from .stores_aws import DynamoDBSnapshotStore
         snapshots = DynamoDBSnapshotStore(_require(e, "MAPLEGUARD_SNAPSHOT_TABLE"), region=region)
