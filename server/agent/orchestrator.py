@@ -111,7 +111,7 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
                        system_prompt: Optional[str] = None,
                        memory: Any = None, session_manager: Any = None,
                        state: Any = None, corpus: Any = None,
-                       trace_attributes: Any = None):
+                       trace_attributes: Any = None, classifier: Any = None):
     """Construct the MapleGuard Strands agent.
 
     Args:
@@ -139,7 +139,7 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
 
     tools = MAPLEGUARD_TOOLS if tools is None else tools
     assert_no_forbidden_tools(tools)
-    configure_deps(matcher=matcher, corrector=corrector, corpus=corpus)
+    configure_deps(matcher=matcher, corrector=corrector, corpus=corpus, classifier=classifier)
     gate = make_policy_gate()
     kwargs: dict[str, Any] = {}
     if memory is not None:

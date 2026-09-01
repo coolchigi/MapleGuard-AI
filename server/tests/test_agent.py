@@ -40,6 +40,7 @@ def test_all_tools_registered_and_named():
     assert names == [
         "compute_crs", "crs_trajectory", "crs_deadlines", "sirs_bc",
         "reachable_paths", "ingest_draws", "audit_reference_letter", "draft_corrected_letter",
+        "classify_policy_change",
     ]
 
 

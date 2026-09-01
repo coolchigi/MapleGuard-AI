@@ -409,13 +409,15 @@ def test_hosted_orchestrator_model_is_pinned_not_the_sdk_default():
 def test_agent_noc_tools_use_bedrock_not_the_anthropic_public_api():
     anthropic = pytest.importorskip("anthropic")
     from agent.config import DEFAULT_BEDROCK_MODEL_ID, build_bedrock_noc_clients
-    matcher, corrector = build_bedrock_noc_clients(env={"MAPLEGUARD_BEDROCK_REGION": "us-east-1"})
-    assert matcher is not None and corrector is not None
-    # The agent-path NOC clients target Bedrock (AWS creds), NOT api.anthropic.com (which needs
+    matcher, corrector, classifier = build_bedrock_noc_clients(
+        env={"MAPLEGUARD_BEDROCK_REGION": "us-east-1"})
+    assert matcher is not None and corrector is not None and classifier is not None
+    # The agent-path model clients target Bedrock (AWS creds), NOT api.anthropic.com (which needs
     # ANTHROPIC_API_KEY the AgentCore container does not have). This is the P0-2 fix.
     assert isinstance(matcher._client, anthropic.AnthropicBedrock)
     assert isinstance(corrector._client, anthropic.AnthropicBedrock)
-    assert matcher._model == DEFAULT_BEDROCK_MODEL_ID == corrector._model
+    assert isinstance(classifier._client, anthropic.AnthropicBedrock)
+    assert matcher._model == DEFAULT_BEDROCK_MODEL_ID == corrector._model == classifier._model
 
 
 def test_shared_deploy_pieces_pin_model_and_bedrock_noc_clients():
@@ -427,6 +429,19 @@ def test_shared_deploy_pieces_pin_model_and_bedrock_noc_clients():
     assert pieces["model"].config["model_id"] == DEFAULT_BEDROCK_MODEL_ID
     assert isinstance(pieces["matcher"]._client, anthropic.AnthropicBedrock)
     assert isinstance(pieces["corrector"]._client, anthropic.AnthropicBedrock)
+
+
+def test_deploy_build_threads_the_cited_corpus_into_the_audit_tool():
+    # P0-3 (non-decorative KB): the hosted build wires the memory store as the audit tool's
+    # citation corpus, so audit_reference_letter re-sources NOC gaps from the KB in deploy
+    # (MAPLEGUARD_MEMORY_BACKEND=bedrock_kb) exactly as it re-sources from the seeded store in dev.
+    pytest.importorskip("strands")
+    import agent.tools as tools
+    from agent.memory import search_sync
+    from agent.runtime import build_orchestrator_from_env
+    build_orchestrator_from_env(model=_fake_model([]))  # default env -> dev seeded corpus
+    assert tools._DEPS.corpus is not None                # the corpus reached the tool layer
+    assert search_sync(tools._DEPS.corpus, "NOC 21234 web developer")  # and it really retrieves
 
 
 # --- 8. Trust posture: the model cannot force eligibility through the tool (P2-7) ------

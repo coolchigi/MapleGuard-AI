@@ -10,12 +10,17 @@
 
 TF ?= terraform
 
-.PHONY: aws-up aws-down plan fmt output init validate
+.PHONY: aws-up aws-down plan fmt output init validate api-package
+
+# Build the API Lambda package (deps as linux/x86_64 wheels + server source) into build/api_pkg/.
+# Required before apply when api_enabled=true (the default). Skipped by `make plan`/`validate`.
+api-package:
+	bash build-api.sh
 
 init:
 	$(TF) init
 
-aws-up: init
+aws-up: init api-package
 	$(TF) apply -auto-approve
 
 plan: init
