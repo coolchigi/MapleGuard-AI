@@ -140,13 +140,31 @@ class LocalSubprocessSandbox:
 
 
 # -------------------------------------------------------------- deploy backend (AgentCore)
-# Source files the sandbox needs to import `crs` and `agent.serde`. Uploaded before the first
-# run so the sandbox computes with the exact repo engine, not a reworded copy.
-_SANDBOX_SOURCE_MODULES = (
-    "crs/__init__.py",
-    "agent/__init__.py",
-    "agent/serde.py",
-)
+# The source the snippet's imports (`from agent import serde` + `from crs import crs`) resolve to,
+# uploaded before the first run so the managed sandbox computes with the exact repo engine. The
+# import closure is exactly {crs, paths, pnp, agent.serde}: crs/paths/pnp import only each other
+# and the stdlib (verified), and serde re-exports over them. We upload EVERY .py in those three
+# packages (not just the __init__), plus agent/serde.py behind a LIGHTWEIGHT stub agent/__init__.py
+# — an empty package init, so `from agent import serde` resolves without the real agent/__init__,
+# which pulls in strands/boto3/noc the sandbox does not have. The earlier partial upload
+# (crs/__init__.py, agent/__init__.py, agent/serde.py) could not import at all: crs/__init__ needs
+# its submodules, and the real agent/__init__ drags in the whole agent package.
+_SANDBOX_SOURCE_PACKAGES = ("crs", "paths", "pnp")
+
+
+def _sandbox_source_files(root: pathlib.Path) -> list[tuple[str, str]]:
+    """(upload_path, content) pairs for the CRS proof surface: every top-level .py in the
+    deterministic packages, plus agent/serde.py behind an empty agent/__init__.py stub.
+    Non-recursive, so test/data subdirs (crs/cases, pnp/fixtures) are skipped."""
+    files: list[tuple[str, str]] = []
+    for pkg in _SANDBOX_SOURCE_PACKAGES:
+        for src in sorted((root / pkg).glob("*.py")):
+            if src.name.startswith("._"):  # skip macOS AppleDouble sidecar files
+                continue
+            files.append((f"{pkg}/{src.name}", src.read_text()))
+    files.append(("agent/__init__.py", ""))  # lightweight package so `from agent import serde` works
+    files.append(("agent/serde.py", (root / "agent" / "serde.py").read_text()))
+    return files
 
 
 class AgentCoreCodeSandbox:
@@ -179,10 +197,8 @@ class AgentCoreCodeSandbox:
         if self._prepared:
             return
         root = pathlib.Path(repo_root) if repo_root else REPO_ROOT
-        for rel in _SANDBOX_SOURCE_MODULES:
-            src = (root / rel)
-            if src.exists():
-                self.client.upload_file(rel, src.read_text())
+        for upload_path, content in _sandbox_source_files(root):
+            self.client.upload_file(upload_path, content)
         self._prepared = True
 
     def execute_code(self, code: str, language: str = "python") -> SandboxResult:

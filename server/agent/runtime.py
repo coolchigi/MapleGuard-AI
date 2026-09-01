@@ -14,9 +14,12 @@ touching the orchestration logic.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from .orchestrator import build_orchestrator, screen_response
+
+logger = logging.getLogger("mapleguard.runtime")
 
 
 def handle(payload: dict, agent: Any = None, model: Any = None,
@@ -66,34 +69,80 @@ def _result_text(result: Any) -> str:
     return str(message)
 
 
-def build_orchestrator_from_env(model: Any = None):
-    """Build the orchestrator wired to the deploy backends the environment selects: the cited
-    corpus (Bedrock KB when `MAPLEGUARD_MEMORY_BACKEND=bedrock_kb`, else the offline dev store)
-    and the MapleGuard trace attributes, so a hosted instance retrieves + is traced without any
-    code change. Session persistence per user is applied per request (AgentCore Memory keyed by
-    the caller), not baked into the shared agent, so it is not wired here.
+def _shared_deploy_pieces(model: Any = None) -> dict:
+    """The environment-selected orchestrator pieces built ONCE and reused across invocations:
+    the pinned Bedrock model, the Bedrock-backed NOC clients, the cited corpus, and the trace
+    attributes. Kept separate from Agent construction so `build_app` can build a fresh Agent per
+    request (bleed-free) over these shared pieces without rebuilding the expensive ones.
 
-    Falls back to a plain orchestrator if the SDK/config is unavailable, so this never blocks a
-    minimal deploy."""
+    Every seam degrades safely: a missing SDK or failed backend leaves that piece unset rather
+    than blocking hosting.
+    """
     from .observability import DEFAULT_TRACE_ATTRIBUTES
-    kwargs: dict[str, Any] = {"model": model, "trace_attributes": DEFAULT_TRACE_ATTRIBUTES}
+    pieces: dict[str, Any] = {"trace_attributes": DEFAULT_TRACE_ATTRIBUTES}
+
+    # Pin the hosted orchestrator's model so the first invoke never falls back to Strands'
+    # shifting default (which asks Bedrock for a model the account may not have enabled). An
+    # injected model (tests / offline) is respected.
+    if model is None:
+        try:
+            from .config import build_bedrock_model
+            model = build_bedrock_model()
+        except Exception:  # pragma: no cover - strands is required in deploy; never block hosting
+            logger.warning("could not build the pinned Bedrock model; using the SDK default")
+            model = None
+    pieces["model"] = model
+
+    # Wire the two model-backed NOC tools to Bedrock, so audit/draft work on the deployed agent
+    # with only AWS credentials (no ANTHROPIC_API_KEY). (None, None) if anthropic is absent.
+    try:
+        from .config import build_bedrock_noc_clients
+        pieces["matcher"], pieces["corrector"] = build_bedrock_noc_clients()
+    except Exception:  # pragma: no cover - additive; a failure must not block hosting
+        logger.warning("could not build Bedrock NOC clients; audit/draft will report unconfigured")
+
+    # Cited corpus: Bedrock KB when MAPLEGUARD_MEMORY_BACKEND=bedrock_kb, else the offline store.
     try:
         from .config import Deployment, build_memory
         mem = build_memory(Deployment.from_env())
         if mem is not None:
-            kwargs["memory"], kwargs["corpus"] = mem[0], mem[1]
+            pieces["memory"], pieces["corpus"] = mem[0], mem[1]
     except Exception:  # pragma: no cover - memory is additive; a failure must not block hosting
         pass
-    return build_orchestrator(**kwargs)
+    return pieces
+
+
+def build_orchestrator_from_env(model: Any = None):
+    """Build one orchestrator wired to the deploy backends the environment selects: the pinned
+    Bedrock model, the Bedrock-backed NOC clients, the cited corpus, and the MapleGuard trace
+    attributes. Session persistence is per request (see `build_app`), not baked into this shared
+    agent. Never blocks a minimal deploy: any unavailable seam is simply left unset."""
+    return build_orchestrator(**_shared_deploy_pieces(model))
+
+
+def _session_manager_for(session_id: Optional[str], deployment: Any) -> Optional[Any]:
+    """A per-caller Strands session manager for this request, or None. Keyed by the AgentCore
+    session id so each caller's conversation/profile is isolated and (with the agentcore backend)
+    restored from AgentCore Memory. Never fatal: a failure degrades to a stateless request."""
+    if not session_id or getattr(deployment, "session_backend", None) == "none":
+        return None
+    try:
+        from .config import build_session_manager
+        return build_session_manager(session_id, deployment)
+    except Exception:  # pragma: no cover - session persistence is additive
+        logger.warning("session manager unavailable for session %s; running stateless", session_id)
+        return None
 
 
 def build_app(model: Any = None, from_env: bool = True):
     """Wrap the entrypoint in a `BedrockAgentCoreApp` for hosting. Requires AgentCore.
 
-    The agent is built once and reused across invocations. `from_env=True` wires the
-    environment-selected backends (see `build_orchestrator_from_env`); pass False (or inject a
-    model) for a bare agent. Returns the app so the caller (`agent/agentcore_app.py`, a deploy
-    script, or `__main__`) can `app.run()`.
+    Expensive backends (the pinned Bedrock model, NOC clients, seeded corpus) are built ONCE via
+    `_shared_deploy_pieces`. Each invocation then builds a FRESH agent over those pieces, keyed by
+    the caller's AgentCore session id, so conversation state never bleeds between callers and the
+    per-user AgentCore Memory profile is restored when that backend is configured. Tracing is
+    enabled so the loop is visible in CloudWatch GenAI Observability. Returns the app so the caller
+    can `app.run()`.
     """
     try:
         from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -104,10 +153,24 @@ def build_app(model: Any = None, from_env: bool = True):
         ) from exc
 
     app = BedrockAgentCoreApp()
-    agent = build_orchestrator_from_env(model=model) if from_env else build_orchestrator(model=model)
+
+    # Export MapleGuard's spans (stamped with the trust-posture attributes) to the OTLP collector
+    # AgentCore Runtime provides via OTEL_EXPORTER_OTLP_ENDPOINT. Never blocks hosting.
+    try:
+        from .observability import enable_tracing
+        enable_tracing(console=False)
+    except Exception:  # pragma: no cover - tracing must never block hosting
+        logger.warning("tracing setup failed; the agent runs untraced")
+
+    pieces = _shared_deploy_pieces(model) if from_env else {"model": model}
+    from .config import Deployment
+    deployment = Deployment.from_env()
 
     @app.entrypoint
-    def invoke(payload: dict) -> dict:
+    def invoke(payload: dict, context: Any = None) -> dict:
+        session_id = getattr(context, "session_id", None) or (payload or {}).get("session_id")
+        session_manager = _session_manager_for(session_id, deployment)
+        agent = build_orchestrator(session_manager=session_manager, **pieces)
         return handle(payload, agent=agent)
 
     app.invoke = invoke  # expose for direct testing of the wrapped handler

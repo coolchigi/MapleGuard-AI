@@ -23,6 +23,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from agent.config import DEFAULT_BEDROCK_MODEL_ID
 from noc import DEFAULT_MODEL, LetterCorrector, LLMDutyMatcher
 
 # Env override for the model id (defaults per backend, see below).
@@ -31,11 +32,12 @@ BACKEND_ENV = "MAPLEGUARD_NOC_BACKEND"
 
 # The default backend and model. We default to Bedrock (one AWS credential covers the agent
 # runtime and this model call) with Sonnet 4.5 — the low-cost choice for this per-letter
-# extraction, deliberately not an Opus-tier model. DEFAULT_BEDROCK_MODEL is the cross-region
-# inference-profile id: it must match the one enabled on your Bedrock model-access page, so
-# adjust the date stamp or region prefix (or set MAPLEGUARD_NOC_MODEL) if yours differs.
+# extraction, deliberately not an Opus-tier model. The Bedrock id is the ONE pinned model id
+# shared with the agent runtime (agent.config.DEFAULT_BEDROCK_MODEL_ID): it must match the
+# cross-region inference profile enabled on your Bedrock model-access page (set
+# MAPLEGUARD_BEDROCK_MODEL or MAPLEGUARD_NOC_MODEL to override).
 DEFAULT_BACKEND = "bedrock"
-DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+DEFAULT_BEDROCK_MODEL = DEFAULT_BEDROCK_MODEL_ID
 
 
 @dataclass(frozen=True)
