@@ -139,18 +139,14 @@ Minimum IAM to call Bedrock: `bedrock:InvokeModel` (and `bedrock:InvokeModelWith
 on the model ARN, plus `bedrock:ListFoundationModels` for the check above. The full runtime role
 adds more later (Steps 6 to 9); this is the floor to make a single model call.
 
-> INTEGRATION GAP — read before Step 5. The NOC model id defaults to `claude-opus-5` in
-> `server/noc/matcher.py` (`DEFAULT_MODEL`). That is not a valid Anthropic API model id and not a
-> valid Bedrock model id, so Step 5 and the `/audit` `/draft` endpoints will fail against a real
-> backend unless you override it. On every credentialed model command below, set
-> `MAPLEGUARD_NOC_MODEL` to a real id for your backend:
-> - Anthropic API: `export MAPLEGUARD_NOC_MODEL=claude-sonnet-4-5-20250929` (use the current
->   Sonnet 4.5 id your account exposes).
-> - Bedrock: `export MAPLEGUARD_NOC_MODEL=<the exact modelId from the list command above>`
->   (Bedrock ids look like `anthropic.claude-...`, or an inference-profile id such as
->   `us.anthropic.claude-...`).
-> This is a config default to fix in a follow-up branch, not something to paper over. Flagging
-> per the honesty rule.
+> MODEL DEFAULTS (post PR #5). The system now pins ONE Bedrock model id,
+> `us.anthropic.claude-sonnet-4-5-20250929-v1:0` (`agent.config.DEFAULT_BEDROCK_MODEL_ID`), shared
+> by the orchestrator, the in-agent NOC tools, and the FastAPI NOC path. Enable that exact
+> cross-region inference profile in the Bedrock console for `$AWS_REGION`. If the id you enabled
+> differs (region prefix or date stamp), override every path at once with
+> `export MAPLEGUARD_BEDROCK_MODEL=<your enabled inference-profile id>`. For the standalone
+> Anthropic-API NOC backend only (`MAPLEGUARD_NOC_BACKEND=anthropic`), the model id is the plain
+> `claude-sonnet-4-5` (`noc.DEFAULT_MODEL`); override with `MAPLEGUARD_NOC_MODEL` if needed.
 
 ---
 
@@ -444,8 +440,9 @@ Confirm the hosted agent responds, then tear down through the AgentCore console 
 
 | Var | Values | Activates |
 |---|---|---|
+| `MAPLEGUARD_BEDROCK_MODEL` / `MAPLEGUARD_BEDROCK_REGION` | id / region | the ONE pinned model, all paths (PR #5) |
 | `MAPLEGUARD_NOC_BACKEND` | `anthropic` \| `bedrock` \| `auto` | which real model client (Step 5) |
-| `MAPLEGUARD_NOC_MODEL` | a real model id | overrides the bad `claude-opus-5` default (Step 4 gap) |
+| `MAPLEGUARD_NOC_MODEL` | a real model id | overrides the NOC model id only (Step 5) |
 | `MAPLEGUARD_MEMORY_BACKEND` | `dev` \| `bedrock_kb` \| `none` | KB corpus (6b) |
 | `MAPLEGUARD_KB_ID` / `MAPLEGUARD_KB_REGION` | ids | KB corpus |
 | `MAPLEGUARD_SESSION_BACKEND` | `file` \| `s3` \| `agentcore` \| `none` | sessions (6c) |
