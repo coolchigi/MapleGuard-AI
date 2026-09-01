@@ -18,6 +18,9 @@ Env vars (all optional; absence = offline dev):
   MAPLEGUARD_MEMORY_REGION    AWS region for AgentCore Memory
   MAPLEGUARD_ACTOR_ID         per-user actor id for the longitudinal profile (default from
                               session_id)
+  MAPLEGUARD_PROFILES_BACKEND file | dynamodb   (default dynamodb if a table is set, else file)
+  MAPLEGUARD_PROFILES_TABLE   DynamoDB table of monitored profiles (deploy; shared by API+monitor)
+  MAPLEGUARD_PROFILES_DIR     directory for the file profile store (dev; default .mapleguard/profiles)
 """
 from __future__ import annotations
 
@@ -62,23 +65,26 @@ def build_bedrock_model(env: Optional[dict] = None):
 
 
 def build_bedrock_noc_clients(env: Optional[dict] = None):
-    """The NOC matcher + corrector wired to Bedrock (`anthropic.AnthropicBedrock`), pinned to the
-    same model id, so audit_reference_letter / draft_corrected_letter work on the deployed agent
-    with only AWS credentials and no ANTHROPIC_API_KEY.
+    """The model-backed NOC/policy clients wired to Bedrock (`anthropic.AnthropicBedrock`), pinned
+    to the same model id, so audit_reference_letter / draft_corrected_letter / classify_policy_change
+    work on the deployed agent with only AWS credentials and no ANTHROPIC_API_KEY.
 
-    Returns (matcher, corrector), or (None, None) if the `anthropic` package is absent — in which
-    case the agent still builds and the two model-backed tools report their own clear error if
-    called. `AnthropicBedrock` requires an explicit region, so we always pass the resolved one.
+    Returns (matcher, corrector, classifier), or (None, None, None) if the `anthropic` package is
+    absent — in which case the agent still builds and the model-backed tools report their own clear
+    error if called. `AnthropicBedrock` requires an explicit region, so we always pass the resolved
+    one.
     """
+    from ingest import PolicyChangeClassifier
     from noc import LLMDutyMatcher, LetterCorrector
     try:
         import anthropic
     except ImportError:  # pragma: no cover - anthropic is a deploy dep; absence is non-fatal
-        return None, None
+        return None, None, None
     client = anthropic.AnthropicBedrock(aws_region=bedrock_region(env))
     model = bedrock_model_id(env)
     return (LLMDutyMatcher(model=model, client=client),
-            LetterCorrector(model=model, client=client))
+            LetterCorrector(model=model, client=client),
+            PolicyChangeClassifier(model=model, client=client))
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,10 @@ class Deployment:
     memory_id: Optional[str] = None      # AgentCore Memory id (session_backend=agentcore)
     memory_region: Optional[str] = None  # AWS region for AgentCore Memory
     actor_id: Optional[str] = None       # per-user id for the longitudinal profile
+    profiles_backend: Optional[str] = None  # "file" | "dynamodb" (default: dynamodb if a table
+                                            # is set, else file — see from_env)
+    profiles_table: Optional[str] = None    # DynamoDB table of monitored profiles
+    profiles_dir: Optional[str] = None      # directory for the file profile store (dev)
 
     @classmethod
     def from_env(cls, env: Optional[dict] = None) -> "Deployment":
@@ -111,6 +121,12 @@ class Deployment:
             memory_id=e.get("MAPLEGUARD_MEMORY_ID"),
             memory_region=e.get("MAPLEGUARD_MEMORY_REGION"),
             actor_id=e.get("MAPLEGUARD_ACTOR_ID"),
+            # profiles default to DynamoDB when a table is named (the deploy path the monitor
+            # Lambda + API share), else the local file store — no separate env needed for dev.
+            profiles_backend=e.get("MAPLEGUARD_PROFILES_BACKEND")
+            or ("dynamodb" if e.get("MAPLEGUARD_PROFILES_TABLE") else "file"),
+            profiles_table=e.get("MAPLEGUARD_PROFILES_TABLE"),
+            profiles_dir=e.get("MAPLEGUARD_PROFILES_DIR"),
         )
 
     @property
@@ -139,6 +155,28 @@ def build_memory(config: Deployment):
         extra = {"region_name": config.kb_region} if config.kb_region else {}
         return build_kb_memory(config.knowledge_base_id, **extra)
     raise ValueError(f"unknown memory_backend {config.memory_backend!r}")
+
+
+DEFAULT_PROFILES_DIR = ".mapleguard/profiles"
+
+
+def build_profile_store(config: Deployment):
+    """The monitored-profile store this deployment reads and writes: file (dev/local) or DynamoDB
+    (deploy). This is the ONE store the API's save-a-profile endpoint writes and the monitor
+    lists, so a profile that entered through the API is a profile the monitor watches — no
+    hand-seeded items. Selection is config only; the shape (`StoredProfile.to_dict`) is identical.
+    """
+    if config.profiles_backend == "dynamodb":
+        if not config.profiles_table:
+            raise ValueError("profiles_backend=dynamodb requires profiles_table "
+                             "(set MAPLEGUARD_PROFILES_TABLE)")
+        from .stores_aws import DynamoDBProfileStore
+        # region left to boto3's env resolution (AWS_REGION), matching the monitor Lambda.
+        return DynamoDBProfileStore(config.profiles_table)
+    if config.profiles_backend == "file":
+        from .monitor import FileProfileStore
+        return FileProfileStore(config.profiles_dir or DEFAULT_PROFILES_DIR)
+    raise ValueError(f"unknown profiles_backend {config.profiles_backend!r}")
 
 
 def build_session_manager(session_id: str, config: Deployment) -> Optional[Any]:

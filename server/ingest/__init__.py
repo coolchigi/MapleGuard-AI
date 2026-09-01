@@ -12,6 +12,7 @@ from .rounds import (ROUNDS_JSON_URL, ROUND_PAGE_BASE, classify, fetch_rounds_js
 from .categories import (CATEGORY_RULES, CATEGORY_SOURCE_URL, CATEGORY_SOURCE_DATE,
                          CANONICAL_SLUGS, CategoryRule, CategoryEligibility,
                          category_eligibility, categories_for_noc, resolve_category)
+from .policy import (CHANGE_TYPES, PolicyChange, PolicyChangeClassifier, validate_policy_change)
 
 __all__ = [
     "DrawCitation", "DrawRecord",
@@ -21,4 +22,5 @@ __all__ = [
     "CATEGORY_RULES", "CATEGORY_SOURCE_URL", "CATEGORY_SOURCE_DATE", "CANONICAL_SLUGS",
     "CategoryRule", "CategoryEligibility", "category_eligibility", "categories_for_noc",
     "resolve_category",
+    "CHANGE_TYPES", "PolicyChange", "PolicyChangeClassifier", "validate_policy_change",
 ]

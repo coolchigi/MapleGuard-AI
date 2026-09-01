@@ -64,8 +64,10 @@ class DynamoDBProfileStore:
     """The monitored candidate profiles, one DynamoDB item each.
 
     Table schema: partition key `id` (S), attribute `data` = JSON of
-    {"id", "profile", "bc_offer"?}. Reads via a paginated scan (the monitored set is small).
-    Inject `table` to test offline.
+    {"id", "profile", "bc_offer"?} (`StoredProfile.to_dict`). Reads via a paginated scan (the
+    monitored set is small); `put` upserts one item — the same shape the file store writes, so
+    the API's save-a-profile path and the monitor's list path share one store. Inject `table`
+    to test offline.
     """
     def __init__(self, table_name: str = "", region: Optional[str] = None,
                  table: Any = None, pk_name: str = "id"):
@@ -78,15 +80,29 @@ class DynamoDBProfileStore:
         while True:
             resp = self._table.scan(**kwargs)
             for item in resp.get("Items", []):
-                rec = json.loads(item["data"]) if "data" in item else item
-                profiles.append(StoredProfile(
-                    id=rec.get("id") or item.get(self._pk, ""),
-                    profile=rec["profile"], bc_offer=rec.get("bc_offer")))
+                profiles.append(self._to_profile(item))
             token = resp.get("LastEvaluatedKey")
             if not token:
                 break
             kwargs["ExclusiveStartKey"] = token
         return profiles
+
+    def put(self, profile: StoredProfile) -> None:
+        self._table.put_item(Item={self._pk: profile.id,
+                                   "data": json.dumps(profile.to_dict())})
+
+    def get(self, profile_id: str) -> Optional[StoredProfile]:
+        resp = self._table.get_item(Key={self._pk: profile_id})
+        item = resp.get("Item") if isinstance(resp, dict) else None
+        return self._to_profile(item) if item else None
+
+    def _to_profile(self, item: dict) -> StoredProfile:
+        if "data" in item:
+            rec = json.loads(item["data"])
+            rec.setdefault("id", item.get(self._pk, ""))
+            return StoredProfile.from_dict(rec)
+        return StoredProfile(id=item.get(self._pk, ""), profile=item["profile"],
+                             bc_offer=item.get("bc_offer"))
 
 
 class SnsAlertSink:

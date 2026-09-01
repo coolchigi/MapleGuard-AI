@@ -37,7 +37,7 @@ from typing import Any, Callable, Optional, Protocol
 from ingest import parse_rounds_json, sort_records
 from ingest.models import DrawRecord
 
-from .tools import crs_deadlines, ingest_draws, reachable_paths
+from .tools import compute_crs, crs_deadlines, ingest_draws, reachable_paths
 
 logger = logging.getLogger("mapleguard.monitor")
 
@@ -45,10 +45,34 @@ logger = logging.getLogger("mapleguard.monitor")
 # --------------------------------------------------------------------- data model
 @dataclass(frozen=True)
 class StoredProfile:
-    """A monitored candidate: an id, the CRS profile dict, and an optional BC job offer."""
+    """A monitored candidate: an id, the CRS profile dict (the same shape `crs.Profile`
+    consumes, via serde), an optional BC job offer, and an optional stored reference letter so a
+    NOC-type policy change can trigger a re-audit. `to_dict`/`from_dict` are the one serialization
+    used by every profile store (file, DynamoDB), so the stored shape is identical across backends.
+
+    `reference_letter` is `{"noc_code": str, "letter_text": str}`. PII CAVEAT: a reference letter
+    contains personal data (names, employer, salary). It rides the same store as the profile (which
+    is already PII) and is stored UNSCRUBBED — Bedrock Guardrails PII redaction is not provisioned
+    yet (no Guardrails resource in infra/). This is flagged, not faked: scrub on write once
+    Guardrails is stood up.
+    """
     id: str
     profile: dict
     bc_offer: Optional[dict] = None
+    reference_letter: Optional[dict] = None  # {"noc_code": str, "letter_text": str}
+
+    def to_dict(self) -> dict:
+        d = {"id": self.id, "profile": self.profile}
+        if self.bc_offer is not None:
+            d["bc_offer"] = self.bc_offer
+        if self.reference_letter is not None:
+            d["reference_letter"] = self.reference_letter
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "StoredProfile":
+        return cls(id=data["id"], profile=data["profile"], bc_offer=data.get("bc_offer"),
+                   reference_letter=data.get("reference_letter"))
 
 
 @dataclass(frozen=True)
@@ -82,13 +106,27 @@ class Alert:
     deadlines: Optional[dict]
     citations: list[str]
     summary: str = ""
+    # Policy-change fields, set only on a policy-change alert (a NOC/CRS-weight/... rule change),
+    # None on a draw alert. `policy_change` is the validated change; `crs` is the deterministic
+    # position with the before/after delta; `letter_gaps` are the re-audit gaps cited to the
+    # (new) NOC/TEER duty text.
+    policy_change: Optional[dict] = None
+    crs: Optional[dict] = None
+    letter_gaps: Optional[list[dict]] = None
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "profile_id": self.profile_id, "as_of": self.as_of, "new_draws": self.new_draws,
             "impact": self.impact, "reachable_alternatives": self.reachable_alternatives,
             "deadlines": self.deadlines, "citations": self.citations, "summary": self.summary,
         }
+        if self.policy_change is not None:
+            out["policy_change"] = self.policy_change
+        if self.crs is not None:
+            out["crs"] = self.crs
+        if self.letter_gaps is not None:
+            out["letter_gaps"] = self.letter_gaps
+        return out
 
 
 @dataclass(frozen=True)
@@ -107,6 +145,15 @@ class SnapshotStore(Protocol):
 
 class ProfileStore(Protocol):
     def list_profiles(self) -> list[StoredProfile]: ...
+
+
+class WritableProfileStore(ProfileStore, Protocol):
+    """A profile store the intake path writes to. The monitor only needs `list_profiles`
+    (read); the API's save-a-profile endpoint needs `put`/`get`. The file store (dev) and the
+    DynamoDB store (deploy) both satisfy this, so a profile saved through the API is the same
+    profile the monitor lists — one store, two readers/writers, no hand-seeded items."""
+    def put(self, profile: StoredProfile) -> None: ...
+    def get(self, profile_id: str) -> Optional[StoredProfile]: ...
 
 
 class AlertSink(Protocol):
@@ -144,12 +191,63 @@ class FileSnapshotStore:
 
 
 class InMemoryProfileStore:
-    """The monitored profiles, in memory. Dev/test default (DynamoDB holds them in deploy)."""
-    def __init__(self, profiles: list[StoredProfile]):
-        self._profiles = list(profiles)
+    """The monitored profiles, in memory. Dev/test default (DynamoDB holds them in deploy).
+    Writable: `put` upserts by id so a test can exercise the same save->list path the API uses."""
+    def __init__(self, profiles: Optional[list[StoredProfile]] = None):
+        self._profiles: dict[str, StoredProfile] = {p.id: p for p in (profiles or [])}
 
     def list_profiles(self) -> list[StoredProfile]:
-        return list(self._profiles)
+        return list(self._profiles.values())
+
+    def put(self, profile: StoredProfile) -> None:
+        self._profiles[profile.id] = profile
+
+    def get(self, profile_id: str) -> Optional[StoredProfile]:
+        return self._profiles.get(profile_id)
+
+
+class FileProfileStore:
+    """The monitored profiles, one JSON file per id under a directory. Dev/demo persistence with
+    no AWS, and the shared store for a locally-run API + a locally-run monitor: the API writes a
+    profile here, the monitor reads the same directory. The stored shape is `StoredProfile.to_dict`,
+    identical to the DynamoDB item's `data`, so swapping file->DynamoDB is config only."""
+    def __init__(self, directory: str):
+        self._dir = directory
+
+    def _path(self, profile_id: str) -> str:
+        import os
+        # Keep the id filesystem-safe without losing round-trip fidelity (the id also lives in
+        # the file body, which is the source of truth on read).
+        safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in profile_id) or "_"
+        return os.path.join(self._dir, f"{safe}.json")
+
+    def _index(self) -> dict[str, str]:
+        import os
+        return {} if not os.path.isdir(self._dir) else {
+            name: os.path.join(self._dir, name)
+            for name in os.listdir(self._dir) if name.endswith(".json")
+        }
+
+    def list_profiles(self) -> list[StoredProfile]:
+        profiles = []
+        for path in self._index().values():
+            with open(path) as f:
+                profiles.append(StoredProfile.from_dict(json.load(f)))
+        return profiles
+
+    def put(self, profile: StoredProfile) -> None:
+        import os
+        os.makedirs(self._dir, exist_ok=True)
+        with open(self._path(profile.id), "w") as f:
+            json.dump(profile.to_dict(), f)
+
+    def get(self, profile_id: str) -> Optional[StoredProfile]:
+        import os
+        path = self._path(profile_id)
+        if not os.path.exists(path):
+            return None
+        with open(path) as f:
+            return StoredProfile.from_dict(json.load(f))
 
 
 class CollectingAlertSink:
@@ -179,6 +277,16 @@ class MonitorDeps:
     source_url: Optional[str] = None
     narrator: Any = None
     horizon_within_reach: bool = True   # also alert when a new draw is one move away
+    # Policy-change watch (optional; the loop only runs it when BOTH are wired):
+    #   fetch_policy_update -> the raw IRCC update text (the only new I/O; inject a fixture in tests)
+    #   classify_update     -> classify+validate that text -> a validated PolicyChange dict or None
+    #                          (the model extracts, the validator drops bad output; see ingest.policy)
+    #   policy_source_url   -> citation for the update
+    #   matcher             -> a noc.DutyMatcher for the NOC re-audit (inject a fake offline)
+    fetch_policy_update: Optional[Callable[[], str]] = None
+    classify_update: Optional[Callable[[str], Optional[dict]]] = None
+    policy_source_url: Optional[str] = None
+    matcher: Any = None
 
 
 def _record_key(rec: DrawRecord) -> list:
@@ -264,6 +372,62 @@ def _profile_alert(sp: StoredProfile, current_draws: list[dict], new_round_numbe
     )
 
 
+def _policy_profile_alert(sp: StoredProfile, change: dict, as_of: str,
+                          matcher: Any) -> Optional[Alert]:
+    """Deterministic decision for one profile against a validated NOC-type policy change: if the
+    change touches the profile's stored reference letter's NOC code, RE-AUDIT that letter against
+    the current (new-TEER) occupation text and, if the change actually moves them (the re-audit now
+    shows gaps or fails), build a cited alert carrying the deterministic CRS position and the gap
+    list. Reuses the real audit path (`noc.audit_letter`); it does not reimplement scoring.
+
+    Returns None when the profile is not moved: no stored letter, the letter's NOC code is not in
+    the change's affected codes, or the re-audit still passes with no gaps (silence is a feature).
+    """
+    letter = sp.reference_letter or {}
+    noc_code = letter.get("noc_code")
+    letter_text = letter.get("letter_text")
+    if not noc_code or not letter_text:
+        return None
+    if noc_code not in set(change.get("affected_noc_codes", [])):
+        return None
+
+    from noc import audit_letter, get_occupation
+    try:
+        occupation = get_occupation(noc_code)
+    except (KeyError, ValueError):
+        return None  # we do not hold this occupation's cited text; cannot audit -> do not guess
+    report = audit_letter(letter_text, occupation, matcher).to_dict()
+    duties = report.get("duties", {})
+    gaps = duties.get("gaps", [])
+    if duties.get("passed") and not gaps:
+        return None  # the reclassification did not create a gap for this profile -> no alert
+
+    # Deterministic CRS position from the core. A NOC reclassification does not change CRS POINTS
+    # (it changes eligibility / the reference-letter bar), so before == after and the delta is 0 —
+    # the honest number; the letter gaps are this change's real impact.
+    crs = None
+    total = compute_crs(sp.profile, as_of=as_of).get("total")
+    if total is not None:
+        crs = {"before": total, "after": total, "delta": 0,
+               "note": ("a NOC reclassification does not change CRS points; it changes the "
+                        "reference-letter bar — see letter_gaps")}
+
+    # Citations: the change source, then each gap's NOC/TEER text source.
+    citations = [change.get("source")] if change.get("source") else []
+    for g in gaps:
+        src = g.get("source")
+        if src and src not in citations:
+            citations.append(src)
+
+    return Alert(
+        profile_id=sp.id, as_of=as_of,
+        new_draws=[], impact=[], reachable_alternatives=[],
+        deadlines=(crs_deadlines(sp.profile, as_of=as_of) if sp.profile.get("date_of_birth") else None),
+        citations=citations,
+        policy_change=change, crs=crs, letter_gaps=gaps,
+    )
+
+
 def tick(deps: MonitorDeps, as_of: Optional[str] = None) -> TickResult:
     """Run one monitoring cycle. Deterministic apart from `deps.fetch_rounds` (the feed read).
 
@@ -293,6 +457,22 @@ def tick(deps: MonitorDeps, as_of: Optional[str] = None) -> TickResult:
                 alert = replace(alert, summary=_narrate(deps.narrator, alert))
             deps.sink.emit(alert)
             alerts.append(alert)
+
+    # Policy-change routing: the OTHER watch. When an update fetcher + classifier are wired, classify
+    # the latest IRCC update (model extracts, validator drops bad output), and for a validated NOC
+    # change re-audit each affected profile's stored letter. Relevance still applies (only profiles
+    # the change actually moves). Independent of the draw delta above.
+    if deps.fetch_policy_update is not None and deps.classify_update is not None:
+        change = deps.classify_update(deps.fetch_policy_update())  # validated dict or None (dropped)
+        if change and change.get("change_type") == "noc":
+            for sp in deps.profiles.list_profiles():
+                pa = _policy_profile_alert(sp, change, ran_at, deps.matcher)
+                if pa is None:
+                    continue
+                if deps.narrator is not None:
+                    pa = replace(pa, summary=_narrate(deps.narrator, pa))
+                deps.sink.emit(pa)
+                alerts.append(pa)
 
     new_snapshot = _updated_snapshot(records, snapshot)
     deps.snapshots.save(new_snapshot)

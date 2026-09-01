@@ -7,9 +7,15 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic>=2.6
+# ASGI->Lambda adapter for the API Lambda / Function URL deploy (api/lambda_handler.py).
+mangum>=0.17
 
 # Real Claude model for the NOC matcher/corrector (anthropic backend or Bedrock)
 anthropic>=0.39
+
+# boto3 is pulled in transitively by strands-agents / bedrock-agentcore, but we import it
+# directly (BedrockModel, AnthropicBedrock, DynamoDB/SNS stores), so declare it explicitly.
+boto3>=1.35
 
 # Agent layer + AgentCore seams (optional at runtime; imported lazily).
 # Pinned exactly: Strands' default Bedrock model id changes across releases, and the deployed
