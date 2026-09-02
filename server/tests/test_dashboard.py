@@ -54,6 +54,24 @@ def _by_code(doc: dict) -> dict:
     return {c["code"]: c for c in doc["position"]["categories"]}
 
 
+# The offline/hermetic draw benchmark: built from a saved real-data rounds feed, never the live
+# network. `precompute.py` bakes demo.json from this SAME fixture, so the demo-file consistency
+# test below can rebuild it exactly. (No fastapi/pydantic here, so bare-core tests can use it.)
+_FEED_URL = "https://www.canada.ca/rounds.json"
+
+
+def _rounds_feed() -> str:
+    import pathlib
+    return (pathlib.Path(__file__).resolve().parents[1] / "ingest" / "fixtures"
+            / "ee_rounds_sample.json").read_text()
+
+
+def _feed_benchmark() -> dict:
+    from api.dashboard import benchmark_from_records
+    from ingest import parse_rounds_json
+    return benchmark_from_records(parse_rounds_json(_rounds_feed(), source_url=_FEED_URL))
+
+
 # --- the builder agrees with the engine ------------------------------------------------
 def test_totals_are_the_engines_totals():
     p = _profile()
@@ -123,11 +141,34 @@ def test_no_language_test_date_leaves_the_expiry_fields_null():
     assert doc["points"]  # the age trajectory still runs
 
 
+def _benchmark(score=500, date="2026-08-06", name="General", round="200", kind="general"):
+    return {"latest": {"score": score, "date": date, "name": name, "round": round,
+                       "kind": kind, "source_url": "https://www.canada.ca/x?q=" + round},
+            "general": None}
+
+
 def test_last_draw_delta_is_total_minus_cutoff():
-    doc = build_dashboard(_profile(), as_of=AS_OF, horizon=HORIZON,
-                          last_draw_score=500, last_draw_date="2026-08-06")
+    doc = build_dashboard(_profile(), as_of=AS_OF, horizon=HORIZON, benchmark=_benchmark(500))
+    assert doc["lastDraw"]["available"] is True
     assert doc["lastDraw"]["score"] == 500
     assert doc["lastDraw"]["delta"] == doc["position"]["total"] - 500
+
+
+def test_last_draw_is_unavailable_not_fabricated_without_a_benchmark():
+    # The whole point of the fix: with no sourced benchmark the builder must NOT invent a cutoff.
+    doc = build_dashboard(_profile(), as_of=AS_OF, horizon=HORIZON, benchmark=None)
+    assert doc["lastDraw"]["available"] is False
+    assert doc["lastDraw"]["score"] is None
+    assert doc["lastDraw"]["delta"] is None
+
+
+def test_general_draw_reference_is_explicit_and_cited():
+    b = _benchmark(521, "2026-09-01", "Canadian Experience Class", "439", "category")
+    b["general"] = {"score": 529, "round": "294", "date": "2024-04-23",
+                    "source_url": "https://www.canada.ca/x?q=294"}
+    gen = build_dashboard(_profile(), as_of=AS_OF, horizon=HORIZON, benchmark=b)["lastDraw"]["general"]
+    assert gen["score"] == 529 and gen["date"] == "2024-04-23" and gen["round"] == "294"
+    assert gen["sourceUrl"].endswith("q=294")
 
 
 # --- shape rules the client depends on -------------------------------------------------
@@ -253,6 +294,7 @@ def test_the_precomputed_demo_file_is_what_the_builder_produces():
     on_disk = json.loads(demo.read_text(encoding="utf-8"))
 
     fresh = build_dashboard(_profile(), as_of=AS_OF, horizon=HORIZON,
+                            benchmark=_feed_benchmark(),
                             generated_by=on_disk["generatedBy"])
     assert fresh == on_disk
 
@@ -269,16 +311,31 @@ from api.model_config import NocModel  # noqa: E402
 
 def _client():
     """The dashboard is purely deterministic, so an unconfigured NOC model is fine here — it
-    only gates /audit and /draft."""
+    only gates /audit and /draft. A fixed rounds feed is injected so the /dashboard hero-line
+    benchmark is sourced from known data, never the live network."""
     return TestClient(create_app(noc_model=NocModel(matcher=None, corrector=None,
                                                     configured=False, backend="none",
-                                                    model="", detail="not needed")))
+                                                    model="", detail="not needed"),
+                                 draws_fetcher=_rounds_feed))
 
 
 def test_endpoint_returns_the_same_document_as_the_builder():
     r = _client().post("/dashboard", json={"profile": PROFILE_DICT, "as_of": "2026-08-22"})
     assert r.status_code == 200
-    assert r.json() == build_dashboard(_profile(), as_of=AS_OF, horizon_years=3)
+    assert r.json() == build_dashboard(_profile(), as_of=AS_OF, horizon_years=3,
+                                       benchmark=_feed_benchmark())
+
+
+def test_endpoint_last_draw_is_sourced_from_the_feed():
+    # Fails if the hero line ever reverts to a hardcoded constant: the score must equal the
+    # latest cutoff in the injected feed, and the citation must link to that exact round.
+    body = _client().post("/dashboard",
+                          json={"profile": PROFILE_DICT, "as_of": "2026-08-22"}).json()
+    latest = _feed_benchmark()["latest"]
+    assert body["lastDraw"]["available"] is True
+    assert body["lastDraw"]["score"] == latest["score"]
+    assert body["lastDraw"]["round"] == latest["round"]
+    assert body["lastDraw"]["sourceUrl"] == latest["source_url"]
 
 
 def test_endpoint_agrees_with_position_and_trajectory_endpoints():
@@ -300,8 +357,13 @@ def test_endpoint_accepts_a_last_draw_override():
                                            "last_draw_score": 470,
                                            "last_draw_date": "2026-08-20"})
     body = r.json()
-    assert body["lastDraw"] == {"score": 470, "delta": body["position"]["total"] - 470,
-                                "cite": "canada.ca/rounds-of-invitations", "date": "2026-08-20"}
+    ld = body["lastDraw"]
+    # An explicit override wins over the live feed, and is still a real (caller-vouched) number.
+    assert ld["available"] is True
+    assert ld["score"] == 470
+    assert ld["delta"] == body["position"]["total"] - 470
+    assert ld["date"] == "2026-08-20"
+    assert ld["general"] is None
 
 
 def test_endpoint_defaults_as_of_to_today():

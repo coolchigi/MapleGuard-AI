@@ -18,8 +18,11 @@ import json
 import os
 from datetime import date
 
-from api.dashboard import build_dashboard
+import pathlib
+
+from api.dashboard import benchmark_from_records, build_dashboard
 from crs import LanguageScores, Profile
+from ingest import parse_rounds_json
 
 # --- the demo profile (the shape tests/test_timeline.py uses) --------------
 AS_OF = date(2026, 8, 22)          # the "Assessment" date shown on the panels
@@ -40,11 +43,26 @@ PROFILE = Profile(
 )
 
 
+# The offline fallback's draw benchmark comes from a saved real-data rounds feed (the same
+# fixture the dashboard tests use), not a hardcoded cutoff. It is dated and cited to its real
+# round, and the LIVE API overrides it with the current feed on every call. Re-run this script to
+# refresh the baked benchmark from an updated fixture.
+_ROUNDS_FIXTURE = (pathlib.Path(__file__).resolve().parents[2]
+                   / "server" / "ingest" / "fixtures" / "ee_rounds_sample.json")
+
+
+def _benchmark() -> dict:
+    records = parse_rounds_json(_ROUNDS_FIXTURE.read_text(encoding="utf-8"),
+                                source_url="https://www.canada.ca/rounds.json")
+    return benchmark_from_records(records)
+
+
 def build() -> dict:
     return build_dashboard(
         PROFILE,
         as_of=AS_OF,
         horizon=HORIZON,
+        benchmark=_benchmark(),
         generated_by="web/scripts/precompute.py (real crs engine)",
     )
 

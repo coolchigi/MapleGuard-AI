@@ -164,6 +164,19 @@ def sort_records(records: List[DrawRecord], newest_first: bool = False) -> List[
     return list(reversed(ordered)) if newest_first else ordered
 
 
+def latest_draw(records: List[DrawRecord], kind: Optional[str] = None) -> Optional[DrawRecord]:
+    """The most recent usable draw, or None when there is none.
+
+    "Usable" means a real cited cutoff: records flagged needs_manual_check or with no parsed
+    cutoff are skipped, so a caller never benchmarks against a guessed number. Pass ``kind``
+    ("general" / "category") to restrict to that bucket, e.g. the last all-program draw.
+    """
+    usable = [r for r in sort_records(records, newest_first=True)
+              if not r.needs_manual_check and r.cutoff is not None
+              and (kind is None or r.kind == kind)]
+    return usable[0] if usable else None
+
+
 def fetch_rounds_json(url: str = ROUNDS_JSON_URL, timeout: float = 30.0) -> str:
     """Thin network fetch: return the raw JSON text of the rounds feed.
 

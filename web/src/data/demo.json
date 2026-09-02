@@ -91,10 +91,22 @@
     ]
   },
   "lastDraw": {
-    "score": 518,
-    "delta": -22,
+    "available": true,
+    "score": 382,
+    "delta": 114,
+    "name": "French-Language proficiency 2026-Version 2",
+    "round": "437",
+    "kind": "category",
     "cite": "canada.ca/rounds-of-invitations",
-    "date": "2026-08-06"
+    "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=437",
+    "date": "2026-08-19",
+    "general": {
+      "score": 529,
+      "round": "294",
+      "date": "2024-04-23",
+      "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=294",
+      "note": "Last all-program (general) draw; none since. Current draws are category-based."
+    }
   },
   "trajectory": {
     "points": [

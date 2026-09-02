@@ -85,7 +85,10 @@ export function PositionPanel({ data }: { data: DashboardData }) {
   const mrz1 = `P<CAN<CRS<${position.total}<<CORE<${position.core}<${spouseMrz}TRANSFER<${position.skillTransfer}<ADD<${String(position.additional).padStart(3, "0")}<<<<`;
   const expiry = data.trajectory.testExpiry;
   const expiryMrz = expiry ? `TEST<EXP<${expiry.slice(2).replace(/-/g, "")}<<` : "TEST<EXP<NONE<<";
-  const mrz2 = `GEN<${lastDraw.score}<DELTA<${Math.abs(lastDraw.delta)}<<${expiryMrz}NOT<ADJUDICATED<<`;
+  const drawMrz = lastDraw.available && lastDraw.score !== null
+    ? `DRAW<${lastDraw.score}<DELTA<${Math.abs(lastDraw.delta ?? 0)}`
+    : `DRAW<NONE<DELTA<NA`;
+  const mrz2 = `${drawMrz}<<${expiryMrz}NOT<ADJUDICATED<<`;
 
   return (
     <div className="sheet">
@@ -100,18 +103,54 @@ export function PositionPanel({ data }: { data: DashboardData }) {
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", color: "var(--muted)" }}>
               COMPREHENSIVE RANKING SYSTEM · /1200
             </div>
-            <p style={{ fontFamily: "var(--serif)", fontSize: 25, lineHeight: 1.26, margin: "12px 0 10px", maxWidth: 360 }}>
-              {lastDraw.delta === 0 ? (
-                <>Exactly level with the last general draw of{" "}</>
-              ) : (
-                <>
-                  {Math.abs(lastDraw.delta)} points{" "}
-                  {lastDraw.delta > 0 ? "above" : "below"} the last general draw of{" "}
-                </>
-              )}
-              <span style={{ color: "var(--maple)", fontWeight: 500 }}>{lastDraw.score}</span>.
-            </p>
-            <Cite>canada.ca/rounds-of-invitations · {lastDraw.date}</Cite>
+            {lastDraw.available && lastDraw.score !== null ? (
+              <>
+                <p style={{ fontFamily: "var(--serif)", fontSize: 25, lineHeight: 1.26, margin: "12px 0 10px", maxWidth: 360 }}>
+                  {lastDraw.delta === 0 ? (
+                    <>Exactly level with the last draw of{" "}</>
+                  ) : (
+                    <>
+                      {Math.abs(lastDraw.delta ?? 0)} points{" "}
+                      {(lastDraw.delta ?? 0) > 0 ? "above" : "below"} the last draw of{" "}
+                    </>
+                  )}
+                  <span style={{ color: "var(--maple)", fontWeight: 500 }}>{lastDraw.score}</span>
+                  {lastDraw.name ? (
+                    <span style={{ color: "var(--muted)" }}>
+                      {" "}({lastDraw.name}{lastDraw.round ? `, round ${lastDraw.round}` : ""})
+                    </span>
+                  ) : null}
+                  .
+                </p>
+                <Cite>
+                  {lastDraw.sourceUrl ? (
+                    <a href={lastDraw.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>
+                      canada.ca/rounds-of-invitations · {lastDraw.date}
+                    </a>
+                  ) : (
+                    <>canada.ca/rounds-of-invitations · {lastDraw.date}</>
+                  )}
+                </Cite>
+                {lastDraw.general ? (
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: "8px 0 0", maxWidth: 360, lineHeight: 1.5 }}>
+                    No all-program (general) draw since round {lastDraw.general.round} on{" "}
+                    {lastDraw.general.date} (cutoff {lastDraw.general.score}); draws are now category-based.{" "}
+                    {lastDraw.general.sourceUrl ? (
+                      <a href={lastDraw.general.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--maple)" }}>
+                        source
+                      </a>
+                    ) : null}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p style={{ fontFamily: "var(--serif)", fontSize: 20, lineHeight: 1.3, margin: "12px 0 10px", maxWidth: 360, color: "var(--muted)" }}>
+                  No current draw benchmark available (live rounds feed unreachable).
+                </p>
+                <Cite>canada.ca/rounds-of-invitations</Cite>
+              </>
+            )}
           </div>
           <Stamp />
         </div>
