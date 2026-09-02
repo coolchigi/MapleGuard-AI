@@ -39,20 +39,36 @@ def create_app(noc_model: Optional[NocModel] = None,
                draws_fetcher: Optional[Any] = None,
                corpus: Any = None,
                profile_store: Any = None,
-               brief_narrator: Any = None):
+               brief_narrator: Any = None,
+               letter_scrubber: Any = None):
     """Build the FastAPI app. `noc_model` injects matcher+corrector (a fake in tests); if None,
     it is built from the environment. `draws_fetcher` is a callable returning the raw IRCC
     rounds JSON for `/draws` (injected in tests; defaults to the live fetch). `corpus` is an
     optional memory store to re-source NOC audit citations from live retrieval. `profile_store`
     is the monitored-profile store `/profiles` writes (injected in tests; defaults to the
-    env-selected store — file locally, DynamoDB in deploy — the SAME store the monitor lists)."""
+    env-selected store — file locally, DynamoDB in deploy — the SAME store the monitor lists).
+    `letter_scrubber` redacts PII from a reference letter before it is stored (injected in tests;
+    defaults to the env-selected scrubber — a Bedrock Guardrail when configured, else a no-op)."""
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
+
+    from .guardrail import build_letter_scrubber
 
     model = noc_model if noc_model is not None else build_noc_model()
     if profile_store is None:
         from agent.config import Deployment, build_profile_store
         profile_store = build_profile_store(Deployment.from_env())
+    scrubber = letter_scrubber if letter_scrubber is not None else build_letter_scrubber()
+
+    def _scrub_letter(letter: Optional[dict]):
+        """Redact PII from a letter's text before it is persisted. Returns (letter, scrubbed) where
+        `scrubbed` is True only when a guardrail actually processed the text."""
+        if not letter or not letter.get("letter_text"):
+            return letter, False
+        result = scrubber.scrub(letter["letter_text"])
+        if result.applied:
+            letter = {**letter, "letter_text": result.text}
+        return letter, result.applied
     # Point the model-backed tools at these clients (and the optional citation corpus). Set once
     # at startup; the deterministic tools ignore it.
     configure_deps(matcher=model.matcher, corrector=model.corrector, corpus=corpus)
@@ -99,7 +115,8 @@ def create_app(noc_model: Optional[NocModel] = None,
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok", "noc_model": {"configured": model.configured,
-                "backend": model.backend, "model": model.model, "detail": model.detail}}
+                "backend": model.backend, "model": model.model, "detail": model.detail},
+                "pii_guardrail": {"configured": getattr(scrubber, "configured", False)}}
 
     # ---------------------------------------------------------------- NOC (model-backed)
     @app.post("/audit")
@@ -143,22 +160,31 @@ def create_app(noc_model: Optional[NocModel] = None,
         _compute(serde.profile_from_dict, req.profile)  # validate; raises -> 422
         profile_id = req.id or uuid.uuid4().hex
         letter = req.reference_letter.model_dump() if req.reference_letter is not None else None
+        scrubbed = False
+        if letter is not None:
+            letter, scrubbed = _scrub_letter(letter)  # redact PII before it is persisted
         profile_store.put(StoredProfile(id=profile_id, profile=req.profile, bc_offer=req.bc_offer,
                                         reference_letter=letter))
-        return {"id": profile_id, "monitored": True}
+        resp = {"id": profile_id, "monitored": True}
+        if letter is not None:
+            resp["pii_scrubbed"] = scrubbed
+        return resp
 
     @app.put("/profiles/{profile_id}/letter")
     def attach_letter(profile_id: str, req: ReferenceLetter) -> dict:
         """Store an employer reference letter on an existing profile, so a NOC-type policy change
-        (e.g. the NOC 2016->TEER 2021 reclassification) can re-audit it. PII note: the letter is
-        stored unscrubbed until Guardrails PII redaction is provisioned (flagged, not faked)."""
+        (e.g. the NOC 2016->TEER 2021 reclassification) can re-audit it. The letter's PII is redacted
+        on write when a Bedrock Guardrail is configured (`pii_scrubbed` says whether it was); with no
+        guardrail it is stored unscrubbed and `pii_scrubbed` is false — flagged, never faked."""
         from agent.monitor import StoredProfile
         sp = profile_store.get(profile_id)
         if sp is None:
             raise HTTPException(status_code=404, detail=f"no monitored profile {profile_id!r}")
+        letter, scrubbed = _scrub_letter(req.model_dump())  # redact PII before it is persisted
         profile_store.put(StoredProfile(id=sp.id, profile=sp.profile, bc_offer=sp.bc_offer,
-                                        reference_letter=req.model_dump()))
-        return {"id": profile_id, "letter_stored": True, "noc_code": req.noc_code}
+                                        reference_letter=letter))
+        return {"id": profile_id, "letter_stored": True, "noc_code": req.noc_code,
+                "pii_scrubbed": scrubbed}
 
     @app.get("/profiles")
     def list_profiles() -> dict:
