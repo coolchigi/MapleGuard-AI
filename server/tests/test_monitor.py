@@ -85,7 +85,7 @@ def test_only_genuinely_new_draws_trigger_after_a_prior_snapshot():
     assert seen_first.new_draw_count > 0
     # Append a brand-new, higher round to the same feed.
     base["rounds"].insert(0, {
-        "drawNumber": "999", "drawDate": "2026-08-20", "drawName": "General",
+        "drawNumber": "999", "drawDate": "2026-09-05", "drawName": "General",
         "drawCRS": "400", "drawSize": "5,000",
     })
     deps2 = _deps([StoredProfile("p1", STRONG_PROFILE)], snapshots=s, doc=json.dumps(base))
