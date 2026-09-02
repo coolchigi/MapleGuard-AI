@@ -19,30 +19,38 @@ classifies, and explains; it never computes a number or asserts eligibility.
 The whole loop runs on ONE profile store: the intake endpoints write it, the monitor lists it —
 no hand-seeded DynamoDB items.
 
-## Deploy status — what's wired vs what needs live creds
+## Deploy status — live vs still to do
 
-Wired in code (tested offline, 249 passing):
-- **Profile + letter intake** — `POST /profiles` / `PUT /profiles/{id}/letter` persist to the store
-  the monitor reads (file locally, DynamoDB in deploy; one seam, `agent.config.build_profile_store`).
-- **API deploy** — the FastAPI app as a Lambda + public Function URL (`infra/api.tf`,
-  `api/lambda_handler.py` via Mangum), sharing the monitor's profiles table.
-- **Policy-change watch** — `classify_policy_change` (model extracts, `validate_policy_change` drops
-  bad output); a validated NOC change re-audits the stored letter via the real audit path.
-- **Consultant brief** — `POST /brief`; numbers/citations from the core, prose screened.
-- **AgentCore model + KB** — one pinned Bedrock model; NOC audit re-sources citations from the KB
-  when `MAPLEGUARD_MEMORY_BACKEND=bedrock_kb`.
+**DEPLOYED & LIVE** on AWS (account 337305803512, us-east-1; verified 2026-09-02):
+- **API Lambda + Function URL** — live at the `api_url` output. `/health`, `/profiles` (DynamoDB
+  round-trip), `/position`, `/dashboard` all verified; `/audit` verified end-to-end on real Bedrock
+  (returns cited duty gaps, honestly flags `needs_verification` for hand-transcribed NOC text).
+- **Autonomous monitor** — Lambda + EventBridge `rate(6 hours)`, live. Draws-only until
+  `MAPLEGUARD_POLICY_URL` is set. A manual invoke fetched the live IRCC feed, diffed, alerted, and
+  wrote the snapshot; a second tick was quiet.
+- **Stores** — DynamoDB `mapleguard-profiles` + `mapleguard-snapshot`, S3 `mapleguard-sessions-*`.
+  A profile saved via the live API is picked up by the monitor with no hand-seeding.
+- **Bedrock model access** — Claude Sonnet 4.5 (`us.anthropic.claude-sonnet-4-5-20250929-v1:0`)
+  enabled for the account; `/audit` and `/draft` work live.
 
-Still needs live creds / spend (cannot run here):
-- API Lambda apply (`make aws-up`) and a real invoke of `/profiles` / `/audit` / `/brief`.
-- `agentcore configure/launch/invoke` with model access + the role's `bedrock:InvokeModel` policy.
-- The Bedrock classifier + duty-matcher on deploy, and a real IRCC-update URL for the deployed
-  monitor's `MAPLEGUARD_POLICY_URL`.
-- The Bedrock KB provisioned so `/audit` cites from live retrieval; AgentCore Memory cross-session.
-- **PII:** stored reference letters are **unscrubbed** until Bedrock Guardrails PII redaction is
-  provisioned (flagged, not faked — scrub on write once Guardrails is stood up).
-- **Order traps:** Bedrock model access must precede any invoke; `make aws-up` runs `api-package`
-  (builds the API Lambda zip) before apply — don't `terraform apply` the API by hand without it;
-  the first monitor tick on an empty snapshot counts every current draw new (quiet from tick 2).
+**STILL TO DO** (each provisions a resource or spends; user-gated):
+- **KB (cited NOC corpus)** — provision a Bedrock Knowledge Base over the NOC passages using
+  **Amazon S3 Vectors** as the vector store (GA, available in us-east-1 as a Bedrock KB store), NOT
+  OpenSearch Serverless (which bills a recurring OCU minimum). Then `MAPLEGUARD_MEMORY_BACKEND=bedrock_kb`
+  flips `/audit` citations to live retrieval. See step 10.
+- **Guardrails PII scrub** — stored reference letters are still **unscrubbed** (flagged, not faked).
+  Provision a Bedrock Guardrail with PII redaction and scrub on write in `PUT /profiles/{id}/letter`.
+  See step 10b. (Code hook is the remaining work; provisioning is cents at demo scale.)
+- **Deployed policy watch** — set `MAPLEGUARD_POLICY_URL` on the monitor Lambda so it runs the NOC
+  re-audit loop, not draws-only. Adds recurring Bedrock spend every tick and needs a real IRCC-update
+  URL (or a seeded fixture source for the demo). See step 9.
+- **AgentCore Runtime** — `agentcore configure/launch/invoke` (step 11). Needs the deployer to hold
+  `ecr:*` / `iam:CreateRole` / `bedrock-agentcore:*` and an arm64 container build. On hold.
+
+**Order traps:** Bedrock model access must precede any invoke (now DONE for this account);
+`make aws-up` runs `api-package` (builds the API Lambda zip) before apply — don't `terraform apply`
+the API by hand without it; the first monitor tick on an empty snapshot counts every current draw
+new (quiet from tick 2).
 
 ---
 
@@ -61,7 +69,7 @@ Working: pip exits 0 with fastapi, mangum, anthropic, strands-agents, bedrock-ag
 # 2. offline suite green   (LOCAL)
 cd server && PYTHONPATH=. ../.venv/bin/python -m pytest -q
 ```
-Working: `249 passed, 5 skipped, 1 xfailed`. The 5 skips are live-backend tests lit up later:
+Working: `253 passed, 5 skipped, 1 xfailed`. The 5 skips are live-backend tests lit up later:
 rounds live-fetch (`MAPLEGUARD_INGEST_LIVE=1`, free), real NOC model (`/audit`, step 6), two live
 NOC unit tests (`MAPLEGUARD_LLM_INTEGRATION=1` + creds), and the live agent
 (`MAPLEGUARD_AGENT_INTEGRATION=1` + Bedrock).
@@ -76,13 +84,13 @@ cd server && PYTHONPATH=. ../.venv/bin/python -m uvicorn api.asgi:app --port 800
 PROFILE='{"education":"bachelors-or-three-year","first_language":{"speaking":9,"listening":9,"reading":9,"writing":9},"date_of_birth":"1996-07-01","canadian_work_years":1}'
 LETTER='This confirms Jane Doe worked as a Web Developer, 37.5 hrs/wk at $85,000. She wrote some HTML. Sincerely.'
 # save the profile WITH a letter (one call), keyed by a stable id:
-curl -sX POST :8000/profiles -H 'Content-Type: application/json' \
+curl -sS -X POST 127.0.0.1:8000/profiles -H 'Content-Type: application/json' \
   -d "{\"profile\":$PROFILE,\"id\":\"demo\",\"reference_letter\":{\"noc_code\":\"21234\",\"letter_text\":\"$LETTER\"}}"
 # ...or attach/replace a letter on an existing profile:
-curl -sX PUT :8000/profiles/demo/letter -H 'Content-Type: application/json' \
+curl -sS -X PUT 127.0.0.1:8000/profiles/demo/letter -H 'Content-Type: application/json' \
   -d "{\"noc_code\":\"21234\",\"letter_text\":\"$LETTER\"}"
-curl -s :8000/profiles            # {"profiles":[{"id":"demo"}]}  <- this is what the monitor scans
-curl -s :8000/profiles/demo       # the stored profile + reference_letter
+curl -s 127.0.0.1:8000/profiles            # {"profiles":[{"id":"demo"}]}  <- this is what the monitor scans
+curl -s 127.0.0.1:8000/profiles/demo       # the stored profile + reference_letter
 ```
 Working: `POST /profiles` → `{"id":"demo","monitored":true}`; `PUT .../letter` →
 `{"letter_stored":true,...}`. The profile+letter are persisted to the local file store
@@ -127,9 +135,9 @@ to run the model extraction for real.
 
 ```bash
 # 6. the consultant brief — one document to hand a consultant   (LOCAL for the CRS/moves half)
-curl -sX POST :8000/brief -H 'Content-Type: application/json' -d "{\"profile\":$PROFILE,\"as_of\":\"2026-08-25\"}"
+curl -sS -X POST 127.0.0.1:8000/brief -H 'Content-Type: application/json' -d "{\"profile\":$PROFILE,\"as_of\":\"2026-08-25\"}"
 # with a letter (audit + drafted correction) this needs the model configured (step 7):
-# curl -sX POST :8000/brief -d "{\"profile\":$PROFILE,\"noc_code\":\"21234\",\"letter_text\":\"$LETTER\",\"draws\":[...from /draws...]}"
+# curl -sS -X POST 127.0.0.1:8000/brief -d "{\"profile\":$PROFILE,\"noc_code\":\"21234\",\"letter_text\":\"$LETTER\",\"draws\":[...from /draws...]}"
 ```
 Working: returns `{crs, deadlines, next_moves, letter_audit, correction_draft, prose, disclaimer}`.
 Every number/citation is a core-tool result; `next_moves` are ranked and dated; with a letter,
@@ -184,12 +192,31 @@ each tick (off by default, so the Lambda stays draws-only and dependency-light).
 
 ```bash
 # 10. the cited corpus: KB dev -> real flip   ($ — KB provisioning + retrieval)
-# Provision a Bedrock Knowledge Base over the NOC passages (agentcore-runbook.md step 2), then:
+# Provision a Bedrock Knowledge Base over the NOC passages using AMAZON S3 VECTORS as the vector
+# store (GA; available in us-east-1 as a Bedrock KB store). Do NOT use OpenSearch Serverless — it
+# bills a recurring OCU minimum that would drain a small demo budget; S3 Vectors is pay-per-use.
+#   Bedrock console -> Knowledge Bases -> Create -> vector store: "S3 vectors" (Quick create), OR
+#   an existing S3 vector index. Source = the NOC passages (agent.noc_seed_passages()).
+# NOTE: the local aws-cli (2.24.17) predates the `s3vectors` API — provision via the console Quick
+# Create, or upgrade the CLI / use a current Terraform aws provider. Then:
 export MAPLEGUARD_MEMORY_BACKEND=bedrock_kb MAPLEGUARD_KB_ID=<kb-id> MAPLEGUARD_KB_REGION=$AWS_REGION
 ```
 Working: with these set, the audit re-sources each NOC gap's citation from live KB retrieval instead
 of the seeded dev store — same code path, `cited_via` flips to `corpus_retrieval`. Unset = the
 offline seeded corpus. IAM: `bedrock:Retrieve`, `bedrock:GetKnowledgeBase`.
+
+```bash
+# 10b. Guardrails — scrub PII from stored reference letters   ($ ~cents at demo scale)
+# Letters are stored UNSCRUBBED today (flagged, not faked). Provision a Bedrock Guardrail with PII
+# redaction (ANONYMIZE the PII entity types: NAME, EMAIL, PHONE, ADDRESS, ...), note its id+version:
+#   Bedrock console -> Guardrails -> Create -> Sensitive information filters -> PII: Redact/Mask.
+# aws bedrock create-guardrail ... (or console). Then redact on WRITE in PUT /profiles/{id}/letter
+# before persisting (apply_guardrail on the letter_text; store the redacted text).
+```
+Working (target): a saved letter round-trips through `ApplyGuardrail` and is persisted with PII
+masked, so the DynamoDB item and any downstream audit never hold raw personal data. IAM:
+`bedrock:ApplyGuardrail`. Remaining work is the code hook (the endpoint does not scrub yet); the
+Guardrail itself is a console/CLI provision.
 
 ```bash
 # 11. host the agent on AgentCore Runtime   ($)
