@@ -25,6 +25,10 @@ no hand-seeded DynamoDB items.
 - **API Lambda + Function URL** — live at the `api_url` output. `/health`, `/profiles` (DynamoDB
   round-trip), `/position`, `/dashboard` all verified; `/audit` verified end-to-end on real Bedrock
   (returns cited duty gaps, honestly flags `needs_verification` for hand-transcribed NOC text).
+- **Web dashboard** — live at https://web-coolchigis-projects.vercel.app (Vercel, public, no SSO
+  gate). Pointed at the deployed API; the hero benchmarks against the live rounds feed (currently
+  "25 below the last draw of 521, CEC round 439, 2026-09-01" for the demo profile, with the cited
+  general-draw note). `/audit` + `/draft` are not demoed there until a KB/model surface is exposed.
 - **Autonomous monitor** — Lambda + EventBridge `rate(6 hours)`, live. Draws-only until
   `MAPLEGUARD_POLICY_URL` is set. A manual invoke fetched the live IRCC feed, diffed, alerted, and
   wrote the snapshot; a second tick was quiet.
@@ -155,6 +159,10 @@ Working: the dashboard loads, sliders + time-machine recompute instantly (Pyodid
 `/draws` / `/dashboard` resolve against the API. The form's submit can call `saveProfile`
 (`web/src/lib/api.ts`) to enter the monitored set. No API reachable → it falls back to the bundled
 `web/src/data/demo.json` (same shape as `/dashboard`).
+
+Deployed: the production build is live at **https://web-coolchigis-projects.vercel.app** (Vercel,
+public). It is pointed at the deployed API's `api_url`; set `NEXT_PUBLIC_API_BASE_URL` to that in
+the Vercel project env and redeploy to re-point it.
 
 ---
 
