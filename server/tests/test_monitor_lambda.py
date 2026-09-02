@@ -88,6 +88,23 @@ def test_sns_sink_publishes_the_alert_json():
     assert json.loads(pub["Message"])["profile_id"] == "p1"
 
 
+def test_sns_sink_truncates_oversized_alert_under_the_limit():
+    # A first tick diffs against an empty snapshot, so every current draw is "new"; the alert
+    # must not serialize past SNS's 256 KB Message limit (real InvalidParameter seen in deploy).
+    sns = FakeSns()
+    sink = SnsAlertSink(topic_arn="arn:aws:sns:us-east-1:0:mg", client=sns)
+    big = [{"name": f"EE #{i}", "cutoff": 400 + i, "blob": "x" * 800} for i in range(500)]
+    sink.emit(Alert(profile_id="p1", as_of="2026-08-25", new_draws=big, impact=[],
+                    reachable_alternatives=[], deadlines=None, citations=["https://x"]))
+    assert len(sns.published) == 1
+    msg = sns.published[0]["Message"]
+    assert len(msg.encode("utf-8")) <= 256 * 1024
+    body = json.loads(msg)
+    assert body["profile_id"] == "p1"       # identity + citations survive truncation
+    assert body["truncated"] is True
+    assert body["new_draws_omitted"] == 500 - 25
+
+
 def test_sns_sink_swallows_publish_errors():
     class Boom:
         def publish(self, **kwargs):

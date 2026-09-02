@@ -122,7 +122,43 @@ class SnsAlertSink:
             self._client.publish(
                 TopicArn=self._topic_arn,
                 Subject=f"MapleGuard: {len(alert.new_draws)} new draw(s) affect your position",
-                Message=json.dumps(alert.to_dict(), default=str),
+                Message=_sns_safe_message(alert.to_dict()),
             )
         except Exception as exc:  # pragma: no cover - publish failure is logged, not fatal
             logger.warning("SNS publish failed for profile=%s: %s", alert.profile_id, exc)
+
+
+# SNS rejects any Message over 256 KB. A first tick (or a snapshot reset) diffs against an empty
+# baseline, so every current draw counts as new and one profile's alert can serialize past that
+# limit. Cap the two unbounded lists to a head sample plus a dropped-count when that happens; the
+# durable stores keep the full alert, this bound is only what SNS will accept.
+_SNS_MAX_BYTES = 256 * 1024
+_SNS_SAMPLE = 25
+
+
+def _sns_safe_message(body: dict) -> str:
+    """JSON for SNS, bounded to the 256 KB limit. Returns the full alert when it fits; otherwise
+    truncates `new_draws`/`impact` to a head sample (recording how many were dropped), and if it
+    still will not fit, falls back to a minimal count-only message."""
+    message = json.dumps(body, default=str)
+    if len(message.encode("utf-8")) <= _SNS_MAX_BYTES:
+        return message
+
+    bounded = dict(body)
+    for key in ("new_draws", "impact"):
+        items = body.get(key)
+        if isinstance(items, list) and len(items) > _SNS_SAMPLE:
+            bounded[key] = items[:_SNS_SAMPLE]
+            bounded[f"{key}_omitted"] = len(items) - _SNS_SAMPLE
+    bounded["truncated"] = True
+    message = json.dumps(bounded, default=str)
+    if len(message.encode("utf-8")) <= _SNS_MAX_BYTES:
+        return message
+
+    return json.dumps({
+        "profile_id": body.get("profile_id"), "as_of": body.get("as_of"),
+        "new_draws_count": len(body.get("new_draws") or []),
+        "impact_count": len(body.get("impact") or []),
+        "citations": body.get("citations"), "truncated": True,
+        "note": "alert exceeded the SNS size limit; fetch the full alert from the API",
+    }, default=str)
