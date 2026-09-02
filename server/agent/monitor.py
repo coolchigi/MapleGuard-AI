@@ -225,7 +225,9 @@ class FileProfileStore:
         import os
         return {} if not os.path.isdir(self._dir) else {
             name: os.path.join(self._dir, name)
-            for name in os.listdir(self._dir) if name.endswith(".json")
+            # Skip dotfiles (e.g. macOS "._demo.json" AppleDouble sidecars on exFAT/network
+            # volumes). They end in .json but are not profile documents.
+            for name in os.listdir(self._dir) if name.endswith(".json") and not name.startswith(".")
         }
 
     def list_profiles(self) -> list[StoredProfile]:
