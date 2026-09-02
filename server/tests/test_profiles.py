@@ -101,7 +101,7 @@ def test_build_profile_store_defaults_to_file_and_flips_to_dynamodb(tmp_path):
 
 
 # --- 3. The API intake endpoints ------------------------------------------------------
-def _client(store):
+def _client(store, scrubber=None):
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
@@ -110,7 +110,7 @@ def _client(store):
     from api.model_config import NocModel
     noc = NocModel(matcher=None, corrector=None, configured=False, backend="fake",
                    model="fake", detail="no key")
-    return TestClient(create_app(noc_model=noc, profile_store=store))
+    return TestClient(create_app(noc_model=noc, profile_store=store, letter_scrubber=scrubber))
 
 
 def test_post_profiles_persists_and_is_retrievable():
@@ -145,6 +145,53 @@ def test_post_profiles_rejects_a_malformed_profile_422():
 
 def test_get_unknown_profile_404():
     assert _client(InMemoryProfileStore()).get("/profiles/nope").status_code == 404
+
+
+# --- 3b. Guardrails: reference letters are PII-scrubbed on write ----------------------
+_LETTER_PII = "This confirms Jane Doe worked as a Web Developer, reachable at 555-123-4567."
+
+
+class _FakeScrubber:
+    """Stands in for a Bedrock Guardrail: redacts a known token so tests prove the write path
+    routes letters through the scrubber before storing."""
+    configured = True
+
+    def scrub(self, text):
+        from api.guardrail import ScrubResult
+        redacted = text.replace("Jane Doe", "{NAME}").replace("555-123-4567", "{PHONE}")
+        return ScrubResult(text=redacted, applied=True, intervened=redacted != text)
+
+
+def test_post_profiles_scrubs_letter_pii_when_guardrail_configured():
+    store = InMemoryProfileStore()
+    client = _client(store, scrubber=_FakeScrubber())
+    resp = client.post("/profiles", json={"profile": STRONG_PROFILE, "id": "p",
+                                          "reference_letter": {"noc_code": "21234",
+                                                               "letter_text": _LETTER_PII}})
+    assert resp.status_code == 200 and resp.json()["pii_scrubbed"] is True
+    stored = store.get("p").reference_letter["letter_text"]
+    assert "Jane Doe" not in stored and "555-123-4567" not in stored
+    assert "{NAME}" in stored and "{PHONE}" in stored
+
+
+def test_put_letter_scrubs_pii_when_guardrail_configured():
+    store = InMemoryProfileStore()
+    client = _client(store, scrubber=_FakeScrubber())
+    client.post("/profiles", json={"profile": STRONG_PROFILE, "id": "p"})
+    resp = client.put("/profiles/p/letter", json={"noc_code": "21234", "letter_text": _LETTER_PII})
+    assert resp.status_code == 200 and resp.json()["pii_scrubbed"] is True
+    assert "Jane Doe" not in store.get("p").reference_letter["letter_text"]
+
+
+def test_letter_stored_unscrubbed_is_flagged_not_faked_without_a_guardrail():
+    # No guardrail configured -> the letter is stored as-is, but the response says so honestly.
+    from api.guardrail import NoopScrubber
+    store = InMemoryProfileStore()
+    client = _client(store, scrubber=NoopScrubber())
+    client.post("/profiles", json={"profile": STRONG_PROFILE, "id": "p"})
+    resp = client.put("/profiles/p/letter", json={"noc_code": "21234", "letter_text": _LETTER_PII})
+    assert resp.json()["pii_scrubbed"] is False
+    assert store.get("p").reference_letter["letter_text"] == _LETTER_PII
 
 
 # --- 4. THE LOOP: a profile saved via the API is watched by the monitor ----------------
