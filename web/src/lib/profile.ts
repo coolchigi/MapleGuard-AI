@@ -19,7 +19,7 @@ export const EDUCATION_OPTIONS: { value: EducationLevel; label: string }[] = [
   { value: "secondary", label: "Secondary school (high school)" },
   { value: "one-year-post-secondary", label: "One-year post-secondary credential" },
   { value: "two-year-post-secondary", label: "Two-year post-secondary credential" },
-  { value: "bachelors-or-three-year", label: "Bachelor’s / three-year post-secondary" },
+  { value: "bachelors-or-three-year", label: "Bachelor’s degree (or 4-year post-secondary program)" },
   { value: "two-or-more-certificates", label: "Two or more credentials (one 3+ years)" },
   { value: "masters-or-professional", label: "Master’s or professional degree" },
   { value: "doctoral", label: "Doctoral degree (PhD)" },

@@ -47,7 +47,7 @@ EDUCATION_LABELS: dict[str, str] = {
     "secondary": "Secondary school (high school)",
     "one-year-post-secondary": "One-year post-secondary credential",
     "two-year-post-secondary": "Two-year post-secondary credential",
-    "bachelors-or-three-year": "Bachelor’s / three-year post-secondary",
+    "bachelors-or-three-year": "Bachelor’s degree (or 4-year post-secondary program)",
     "two-or-more-certificates": "Two or more credentials (one 3+ years)",
     "masters-or-professional": "Master’s or professional degree",
     "doctoral": "Doctoral degree (PhD)",
