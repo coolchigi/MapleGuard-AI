@@ -125,7 +125,30 @@ export type DashboardData = {
     additional: number;
     categories: Category[];
   };
-  lastDraw: { score: number; delta: number; cite: string; date: string };
+  lastDraw: {
+    /** False when the live rounds feed was unreachable: no benchmark is shown, none is invented. */
+    available: boolean;
+    /** The benchmarked round's cutoff and the candidate's gap to it. Null when unavailable. */
+    score: number | null;
+    delta: number | null;
+    cite: string;
+    date: string | null;
+    /** The real round the score comes from (IRCC draws are all category-based now). */
+    name?: string | null;
+    round?: string | null;
+    kind?: string | null;
+    sourceUrl?: string | null;
+    /** Set only when unavailable: why there is no benchmark. */
+    note?: string;
+    /** The last all-program (general) draw, shown explicitly since none has run since 2024. */
+    general?: {
+      score: number;
+      round: string;
+      date: string;
+      sourceUrl?: string | null;
+      note: string;
+    } | null;
+  };
   trajectory: {
     points: TrajectoryPoint[];
     cliffs: Cliff[];

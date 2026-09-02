@@ -49,8 +49,8 @@ class DashboardRequest(BaseModel):
                               description="How far forward the trajectory runs from as_of.")
     last_draw_score: Optional[int] = Field(
         default=None, ge=0, le=1200,
-        description="CRS cutoff of the most recent general round, for the 'points below' line. "
-                    "Omit to use the server's stated constant; fetch live values from /draws.")
+        description="Override the draw cutoff for the 'points below' line. Omit to have the "
+                    "server source the most recent round live from the feed (never a constant).")
     last_draw_date: Optional[str] = Field(default=None, description="ISO date of that round.")
 
 

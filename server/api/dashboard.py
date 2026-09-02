@@ -30,12 +30,11 @@ from crs import tables as T
 CRS_CRITERIA = "canada.ca/crs-criteria"
 ROUNDS = "canada.ca/rounds-of-invitations"
 
-# The most recent general round, used only for the "N points below the last draw" line. It is a
-# stated constant with its citation rather than a live fetch, so this stays a pure function;
-# callers holding fresher data pass `last_draw_score`/`last_draw_date`, and the live feed is
-# available on its own at `GET /draws`.
-LAST_GENERAL_DRAW = 518
-LAST_DRAW_DATE = "2026-08-06"
+# The "N points below the last draw" line is benchmarked against a REAL cited round, never a
+# hardcoded number. `build_dashboard` takes a `benchmark` (assembled from the live rounds feed by
+# `benchmark_from_records`) and refuses to invent one: with no benchmark it reports the comparison
+# as unavailable rather than fabricating a cutoff. This keeps the builder pure; the API endpoint
+# does the live fetch and passes the result in.
 
 DEFAULT_HORIZON_YEARS = 3
 
@@ -225,6 +224,62 @@ def _additional_category(score: Score, pts: dict[str, int]) -> dict[str, Any]:
     return out
 
 
+# --------------------------------------------------------------------- draw benchmark
+_GENERAL_NOTE = ("Last all-program (general) draw; none since. "
+                 "Current draws are category-based.")
+
+
+def benchmark_from_records(records) -> Optional[dict]:
+    """Assemble the draw benchmark from live ingest records, or None when the feed yields no
+    usable draw. `latest` is the most recent cited round (any type, since IRCC's current draws
+    are all category-based); `general` is the most recent all-program round when the latest is
+    itself not general, so the hero line can state, explicitly and cited, that general draws have
+    stopped. Every value here is a real cutoff from a real cited round -- nothing is invented."""
+    from ingest import latest_draw
+
+    latest = latest_draw(records)
+    if latest is None:
+        return None
+
+    def _rec(r) -> dict:
+        return {"score": r.cutoff, "date": r.date.isoformat(), "name": r.name,
+                "round": r.round_number, "kind": r.kind, "source_url": r.citation.round_url}
+
+    benchmark = {"latest": _rec(latest), "general": None}
+    if latest.kind != "general":
+        general = latest_draw(records, kind="general")
+        if general is not None:
+            benchmark["general"] = {"score": general.cutoff, "round": general.round_number,
+                                    "date": general.date.isoformat(),
+                                    "source_url": general.citation.round_url}
+    return benchmark
+
+
+def _benchmark_from_override(score: int, date: Optional[str]) -> dict:
+    """A benchmark built from a caller-supplied cutoff (the `/dashboard` override / tests). It is
+    still a real number the caller vouches for, just not fetched here."""
+    return {"latest": {"score": score, "date": date, "name": None, "round": None,
+                       "kind": None, "source_url": ROUNDS}, "general": None}
+
+
+def _last_draw_view(benchmark: Optional[dict], total: int) -> dict:
+    """The `lastDraw` block the client renders. With no benchmark the comparison is reported
+    unavailable (never a fabricated cutoff); with one, the delta is `total - cutoff` and the real
+    round's name/number/date/source travel with it so the citation links to that exact round."""
+    if not benchmark or not benchmark.get("latest"):
+        return {"available": False, "score": None, "delta": None, "cite": ROUNDS, "date": None,
+                "note": "No draw benchmark available (live rounds feed unreachable)."}
+    latest = benchmark["latest"]
+    view = {"available": True, "score": latest["score"], "delta": total - latest["score"],
+            "name": latest.get("name"), "round": latest.get("round"), "kind": latest.get("kind"),
+            "cite": ROUNDS, "sourceUrl": latest.get("source_url"), "date": latest["date"]}
+    general = benchmark.get("general")
+    view["general"] = None if general is None else {
+        "score": general["score"], "round": general["round"], "date": general["date"],
+        "sourceUrl": general.get("source_url"), "note": _GENERAL_NOTE}
+    return view
+
+
 # ---------------------------------------------------------------------- the builder
 def _plus_years(d: date, years: int) -> date:
     try:
@@ -237,8 +292,7 @@ def build_dashboard(profile: Profile,
                     as_of: Optional[date] = None,
                     horizon: Optional[date] = None,
                     horizon_years: int = DEFAULT_HORIZON_YEARS,
-                    last_draw_score: int = LAST_GENERAL_DRAW,
-                    last_draw_date: str = LAST_DRAW_DATE,
+                    benchmark: Optional[dict] = None,
                     generated_by: str = "api /dashboard (real crs engine)") -> dict:
     """Assemble the whole dashboard document for `profile`.
 
@@ -293,12 +347,7 @@ def build_dashboard(profile: Profile,
             "additional": score.additional,
             "categories": categories,
         },
-        "lastDraw": {
-            "score": last_draw_score,
-            "delta": score.total - last_draw_score,
-            "cite": ROUNDS,
-            "date": last_draw_date,
-        },
+        "lastDraw": _last_draw_view(benchmark, score.total),
         "trajectory": {
             "points": points,
             "cliffs": cliffs,
@@ -315,6 +364,7 @@ def build_dashboard(profile: Profile,
 def dashboard_from_dict(profile: dict,
                         as_of: Optional[str] = None,
                         horizon_years: int = DEFAULT_HORIZON_YEARS,
+                        benchmark: Optional[dict] = None,
                         last_draw_score: Optional[int] = None,
                         last_draw_date: Optional[str] = None) -> dict:
     """JSON-in / JSON-out wrapper for the HTTP layer.
@@ -323,13 +373,19 @@ def dashboard_from_dict(profile: dict,
     path for a profile dict — it raises on a malformed profile rather than defaulting one, so a
     bad request can never score as a real candidate. Anything it raises (plus the date_of_birth
     and horizon checks in `build_dashboard`) surfaces as a 422 in `api.app`.
+
+    `benchmark` is the live draw benchmark the endpoint assembled from the feed. A caller may
+    instead pass `last_draw_score` (+ optional date) to force a specific cutoff (the request
+    override / tests); with neither, the draw comparison is reported unavailable, never faked.
     """
     from agent import serde
+
+    if benchmark is None and last_draw_score is not None:
+        benchmark = _benchmark_from_override(last_draw_score, last_draw_date)
 
     return build_dashboard(
         serde.profile_from_dict(profile),
         as_of=serde._parse_date(as_of),
         horizon_years=horizon_years,
-        last_draw_score=LAST_GENERAL_DRAW if last_draw_score is None else last_draw_score,
-        last_draw_date=last_draw_date or LAST_DRAW_DATE,
+        benchmark=benchmark,
     )

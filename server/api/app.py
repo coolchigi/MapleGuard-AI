@@ -81,6 +81,20 @@ def create_app(noc_model: Optional[NocModel] = None,
         except (KeyError, ValueError):
             raise HTTPException(status_code=404, detail=f"unknown NOC code {noc_code!r}")
 
+    def _live_benchmark():
+        """Best-effort draw benchmark from the live rounds feed for the /dashboard hero line.
+        Uses the same fetcher as /draws (injected in tests). Any fetch/parse failure returns
+        None so the dashboard reports the comparison unavailable rather than 500ing or, worse,
+        falling back to a fabricated cutoff."""
+        from ingest import ROUNDS_JSON_URL, parse_rounds_json
+
+        from .dashboard import benchmark_from_records
+        try:
+            raw = (draws_fetcher or _default_draws_fetcher)()
+            return benchmark_from_records(parse_rounds_json(raw, source_url=ROUNDS_JSON_URL))
+        except Exception:
+            return None
+
     # ---------------------------------------------------------------- health / meta
     @app.get("/health")
     def health() -> dict:
@@ -182,8 +196,10 @@ def create_app(noc_model: Optional[NocModel] = None,
 
         Needs a date_of_birth on the profile; a static `age` cannot be run forward over dates
         and answers 422."""
+        # Source the draw benchmark live from the feed; a caller-supplied cutoff overrides it.
+        benchmark = None if req.last_draw_score is not None else _live_benchmark()
         return _compute(dashboard_from_dict, req.profile, as_of=req.as_of,
-                        horizon_years=req.horizon_years,
+                        horizon_years=req.horizon_years, benchmark=benchmark,
                         last_draw_score=req.last_draw_score,
                         last_draw_date=req.last_draw_date)
 
