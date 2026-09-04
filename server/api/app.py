@@ -112,6 +112,16 @@ def create_app(noc_model: Optional[NocModel] = None,
             return None
 
     # ---------------------------------------------------------------- health / meta
+    @app.get("/")
+    def root() -> dict:
+        """A friendly landing response so the bare Function URL is not a 404. Names the service
+        and points at the endpoints a caller actually uses."""
+        return {"service": "MapleGuard API",
+                "description": "Deterministic Canadian-immigration position + cited NOC audit.",
+                "endpoints": {"health": "GET /health", "dashboard": "POST /dashboard",
+                              "position": "POST /position", "draws": "GET /draws",
+                              "audit": "POST /audit", "profiles": "GET /profiles"}}
+
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok", "noc_model": {"configured": model.configured,

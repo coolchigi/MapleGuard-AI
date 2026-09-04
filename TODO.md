@@ -7,6 +7,17 @@ Layout: `server/` (all Python: crs pnp paths noc ingest agent tests) · `web/` (
 
 **Status 2026-08-26:** 151 passed, 22 skipped (live LLM/AWS/SDK), 1 xfail (169 in the SDK venv). Restructured to `server/` + `web/` + `docs/`. On main: deterministic core (`crs`→`trajectory`/`deadlines`→`sirs_bc`→`reachable_paths`, oracle 474) + full NOC feature + genuine Strands agent (tools + gates + cited-corpus memory + session storage + AgentCore Code-Interpreter/Memory/Observability seams) + draw ingestion + category rules + autonomous monitoring loop + BC-SIRS verify pipeline. **Dashboard BUILT** (`web/`, interactive time machine) — Vercel deploy pending user. Pushed to github.com/coolchigi/MapleGuard-AI. Pre-mortem: deployed screen (built, deploy pending), autonomous loop (done), visible AgentCore (seams done, live AWS provisioning pending). Nothing deployed yet.
 
+**Status 2026-09-02:** the backend is DEPLOYED AND LIVE on AWS (account 337305803512, us-east-1). Done this day:
+- **Backend live:** API Lambda + public Function URL, autonomous monitor Lambda on EventBridge rate(6h), DynamoDB profiles + snapshot tables, S3 session bucket, SNS alerts. Stood up via `make aws-up`. A profile saved through the live API is picked up by the monitor (verified).
+- **Bedrock model path proven live:** a real `/audit` against the live API returns cited NOC duty gaps and honestly flags `needs_verification` (hand-transcribed NOC text). No stub. Model access enabled for the account.
+- **Web dashboard live + honest:** https://web-coolchigis-projects.vercel.app (public). The fabricated "518 general draw" hero number is gone (PR #15 + #16). It now benchmarks against the live rounds feed with a real citation. `/dashboard` sources the benchmark live.
+- **Guardrails scrub-on-write merged** (PR #18): PII redaction hook on the letter-write path, active once `MAPLEGUARD_GUARDRAIL_ID` is set, and `/health` reports `pii_guardrail.configured`.
+- **Friendly root `/` route added** so the bare Function URL returns service + endpoints instead of 404.
+- **Monitor SNS alert size bug fixed** (PR #13): oversized first-tick alert no longer exceeds the 256KB SNS limit.
+- **PR #19 closed:** it carried an empty-guide commit that would have wiped `docs/standup-guide.md` on merge. The guide is owned by another session now.
+
+Still to do (each needs a console step, then I wire + redeploy): S3 Vectors KB (cited corpus), provision the Guardrail id, set `MAPLEGUARD_POLICY_URL` for the deployed re-audit loop, AgentCore Runtime deploy.
+
 > Note: the CRS `engine.py`/`tables.py` were rebuilt on 2026-08-21 after an accidental overwrite; the rebuild passes every prior test including the 474 oracle and the skill-transfer anchors, so it is functionally the restored engine.
 
 > **DONE 2026-08-26:** restructured to `server/` (all Python) + `web/` + `docs/` via `git mv` (history preserved). Tests run from `server/`. All sessions now branch from this layout.

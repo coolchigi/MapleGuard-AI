@@ -62,6 +62,14 @@ def test_health_reports_model_status():
     assert r.json()["noc_model"]["configured"] is True
 
 
+def test_root_is_a_friendly_landing_not_a_404():
+    r = _client().get("/")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["service"] == "MapleGuard API"
+    assert body["endpoints"]["health"] == "GET /health"
+
+
 # --- deterministic compute endpoints -------------------------------------------------
 def test_position_matches_the_engine():
     from crs import LanguageScores, Profile, crs
