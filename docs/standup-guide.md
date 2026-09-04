@@ -76,7 +76,8 @@ curl -s 127.0.0.1:8000/profiles/demo       # -> the stored profile + reference l
 You should see `{"id":"demo","monitored":true}` from the save. The candidate now lives in the
 same store the monitor reads, so it will be re-checked automatically when the data changes. A
 badly-formed profile is rejected with a 422. `/audit`, `/draft`, and the letter version of
-`/brief` need the AI model, so they answer 503 until you configure one (step 8).
+`/brief` need the AI model, so they answer 503 locally. They work against the deployed backend
+(see "Run it on AWS"), which has the model turned on.
 
 ### 5. Watch the monitor catch a rule change
 
@@ -130,7 +131,7 @@ letter audit and a suggested rewrite, into a single document you could hand to a
 
 ```bash
 curl -sS -X POST 127.0.0.1:8000/brief -H 'Content-Type: application/json' -d "{\"profile\":$PROFILE,\"as_of\":\"2026-08-25\"}"
-# The letter audit + rewrite parts need the AI model configured (step 8):
+# The letter audit + rewrite parts need the AI model, so run them against the deployed backend:
 # curl -sS -X POST 127.0.0.1:8000/brief -d "{\"profile\":$PROFILE,\"noc_code\":\"21234\",\"letter_text\":\"$LETTER\",\"draws\":[...]}"
 ```
 Every number and citation comes from the deterministic engine. Any AI-written prose that tries to
@@ -154,92 +155,118 @@ Vercel project and redeploy.
 
 ## Run it on AWS
 
-The local run above uses no cloud and no AI. This section turns on the real pieces: the AI model
-that audits letters, and the always-on cloud deployment (the API, the monitor, and their stores).
+The local run above uses no cloud. This deploys the real backend: the same API and monitor you ran
+locally, now hosted on AWS with the AI letter audit turned on.
 
 **First, how you authenticate.** This repo uses **aws-vault**, so your AWS keys are not sitting in
-`~/.aws/credentials`. Put `aws-vault exec <profile> --no-session --` in front of every `aws`,
-`terraform`, `make`, and `agentcore` command below, or they fail with "Unable to locate
-credentials". Two profiles: **terraform-dev** (creates the cloud resources) and **strands-lab**
-(Bedrock model calls only). The `--no-session` flag avoids a stale cached login. If you are not on
-aws-vault, set a normal profile instead (`export AWS_PROFILE=...`) and drop the wrapper.
+`~/.aws/credentials`. Put `aws-vault exec terraform-dev --no-session --` in front of every `aws`,
+`terraform`, and `make` command below, or they fail with "Unable to locate credentials". The
+`--no-session` flag avoids a stale cached login. If you are not on aws-vault, set a normal profile
+instead (`export AWS_PROFILE=...`) and drop the wrapper.
 
-### 8. Turn on the AI model (AWS Bedrock)
+### 8. Stand up the entire backend (one command)
 
-The letter audit and rewrite call Claude through AWS Bedrock. You enable the model once in the
-console, then confirm your identity resolves.
+From the `infra` directory:
 
 ```bash
 export AWS_REGION=us-east-1
-aws-vault exec terraform-dev --no-session -- aws sts get-caller-identity   # confirms who you are
-# In the Bedrock console: Model access -> enable "Claude Sonnet 4.5"
-#   model id: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+cd infra && aws-vault exec terraform-dev --no-session -- make aws-up
 ```
-The model id above is the one the code expects. If you enable a different one, set
-`MAPLEGUARD_BEDROCK_MODEL=<your id>`. The role that calls Bedrock needs `bedrock:InvokeModel` on
-that model (the exact policy is in `agentcore-runbook.md`, and a missing grant is the most common
-first-call failure). To prove it works end to end:
+
+That one command does everything: it packages the API into a Lambda zip and creates the whole
+backend in AWS. Idle cost is close to zero. What it creates:
+
+- the **API**, a Lambda with a public HTTPS URL,
+- the **monitor**, a Lambda that runs itself every 6 hours,
+- their shared storage: two DynamoDB tables, an S3 bucket, and an alerts topic.
+
+When it finishes it prints the addresses of what it made:
+
+```
+alerts_topic_arn = "arn:aws:sns:us-east-1:337305803512:mapleguard-alerts"
+api_url          = "https://24kfuvos2p4l46slfkmiztkozq0imghb.lambda-url.us-east-1.on.aws/"
+monitor_function = "mapleguard-monitor"
+profiles_table   = "mapleguard-profiles"
+schedule         = "rate(6 hours)"
+session_bucket   = "mapleguard-sessions-337305803512"
+snapshot_table   = "mapleguard-snapshot"
+```
+
+The one you need is **`api_url`**: that is your live backend. The rest are the pieces it just
+created (the two tables the API and monitor share, the monitor Lambda's name, the S3 bucket, the
+alerts topic, and how often the monitor runs). You can reprint this list any time with
+`aws-vault exec terraform-dev --no-session -- make output`.
+
+### 9. Confirm it works, and point the web app at it
+
+Check the API is up and the AI audit works (use your own `api_url`):
 
 ```bash
-cd server && MAPLEGUARD_NOC_BACKEND=bedrock PYTHONPATH=. \
-  aws-vault exec strands-lab --no-session -- ../.venv/bin/python scripts/prove_noc_draft.py
+API=https://24kfuvos2p4l46slfkmiztkozq0imghb.lambda-url.us-east-1.on.aws
+curl -s $API/health        # -> {"status":"ok", ...}
+curl -s -X POST $API/audit -H 'Content-Type: application/json' \
+  -d '{"noc_code":"21231","letter_text":"Jane Doe worked as a software engineer, wrote and tested code."}'
 ```
+The `/audit` call returns a real Claude-generated audit. The audit uses Claude through Bedrock, and
+`make aws-up` already gave the Lambda permission to call it, so there is nothing extra to enable.
 
-### 9. Deploy the always-on stack
+Then point the web dashboard at the deployed backend: set `NEXT_PUBLIC_API_BASE_URL` to your
+`api_url` in the Vercel project and redeploy. A profile saved through the deployed API lands in the
+cloud store the monitor reads, the same loop as local.
 
-This creates the cloud version of what you ran locally: the API (as a Lambda with a public URL),
-the monitor (a Lambda that runs itself every 6 hours), and their DynamoDB and S3 storage. It costs
-almost nothing while idle.
+To tear the whole backend down: `aws-vault exec terraform-dev --no-session -- make aws-down`.
 
-```bash
-cd infra && aws-vault exec terraform-dev --no-session -- make aws-up     # builds + deploys everything
-aws-vault exec terraform-dev --no-session -- make output                 # prints the resource names + the API URL
-```
-`make output` gives you `api_url`, the public HTTPS address of the deployed API. Point the web app
-at it (set `NEXT_PUBLIC_API_BASE_URL` to that value), and a profile saved through it lands in the
-cloud store the monitor reads, exactly like the local flow.
+That is the backend, fully stood up. Everything below is optional and not required for it to run.
 
-To make the deployed monitor also watch for occupation-rule changes (step 5's behaviour, not just
-new draws), set `MAPLEGUARD_POLICY_URL=<IRCC update page>` on the monitor Lambda. That turns on the
-AI classifier on every run, so it does add ongoing model cost. It is off by default.
+---
 
-To tear it all down: `aws-vault exec terraform-dev --no-session -- make aws-down`.
+## Optional extras
 
-### 10. Give the audit real sources (Bedrock Knowledge Base)
+Skip this whole section unless you want one of these specific capabilities. The backend from step 8
+works without any of them.
 
-By default the letter audit cites occupation duties from a small built-in copy. To cite them from
-a live, searchable source instead, put the occupation text in a **Knowledge Base**.
+### Watch for occupation-rule changes, not just new draws
 
-Use **Amazon S3 Vectors** as the store behind it. It is generally available in us-east-1 and bills
-per use. Do not use OpenSearch Serverless here, it charges a standing hourly minimum that would eat
-a small budget. Create the Knowledge Base in the Bedrock console (Knowledge Bases -> Create ->
-choose "S3 vectors"), point it at the occupation passages, then:
+Out of the box the deployed monitor reacts to new Express Entry draws. To also have it catch
+occupation-rule changes (the step-5 behaviour) it needs a page to watch.
 
-```bash
-export MAPLEGUARD_MEMORY_BACKEND=bedrock_kb MAPLEGUARD_KB_ID=<kb-id> MAPLEGUARD_KB_REGION=$AWS_REGION
-```
-With this set, each audit citation comes from live retrieval. Unset, it uses the built-in copy.
-(Note: the local aws-cli 2.24.17 is too old to have the `s3vectors` commands, so create the KB in
-the console or upgrade the CLI.)
+**What you do:** in the Lambda console, open the `mapleguard-monitor` function, go to
+Configuration -> Environment variables, and add `MAPLEGUARD_POLICY_URL` set to the IRCC update page
+you want it to read each run. That is the only action. Leave it unset and the monitor stays
+draws-only. Note it calls the AI on every run once set, so it adds a small ongoing cost.
 
-### 10b. Redact personal data from stored letters (Bedrock Guardrails)
+### Cite letter audits from a live source instead of the built-in copy
 
-Reference letters contain names and contact details. To strip that out before a letter is stored,
-create a **Bedrock Guardrail** with PII redaction (Bedrock console -> Guardrails -> Create ->
-Sensitive information filters -> PII: Redact), then point the API at it:
+Today the letter audit cites occupation duties from a copy bundled in the repo, which is accurate
+and needs nothing. This option swaps that for citations pulled from a searchable AWS store, a
+**Bedrock Knowledge Base**.
 
-```bash
-# set on the API Lambda:
-#   MAPLEGUARD_GUARDRAIL_ID=<id>   MAPLEGUARD_GUARDRAIL_VERSION=<version or DRAFT>
-```
-With a guardrail set, a saved letter is scrubbed before it hits the database, and the save response
-reports `pii_scrubbed: true` (`/health` shows `pii_guardrail.configured`). With none set, letters
-are stored as-is and the response says `pii_scrubbed: false`, so the state is always honest.
+There is no Knowledge Base yet. "Where do we get it" means you create one, it is an AWS resource
+you provision once:
 
-### 11. Host the AI agent (AgentCore Runtime)
+1. In the Bedrock console: Knowledge Bases -> Create.
+2. For the vector store, choose **Amazon S3 Vectors** (available in us-east-1, billed per use). Do
+   not pick OpenSearch Serverless, it charges a standing hourly minimum.
+3. Point it at the occupation text (the passages the code seeds from `agent.noc_seed_passages()`).
+4. Copy the Knowledge Base id it gives you, and set it on the API Lambda:
+   `MAPLEGUARD_MEMORY_BACKEND=bedrock_kb`, `MAPLEGUARD_KB_ID=<that id>`, `MAPLEGUARD_KB_REGION=us-east-1`.
 
-This hosts the conversational agent (the one that answers "where do I stand?" by calling the
-deterministic tools) on AWS.
+With those set, audit citations come from live retrieval. Unset, they come from the built-in copy.
+This is a nice-to-have, not part of standing up the backend.
+
+### Redact personal data from stored letters
+
+Reference letters hold names and contact details. To strip that before a letter is saved, create a
+**Bedrock Guardrail** with PII redaction (Bedrock console -> Guardrails -> Create -> Sensitive
+information filters -> PII: Redact), then set `MAPLEGUARD_GUARDRAIL_ID=<id>` (and optionally
+`MAPLEGUARD_GUARDRAIL_VERSION`) on the API Lambda. Once set, a saved letter is scrubbed before it
+reaches the database and the save response reports `pii_scrubbed: true`. Unset, letters are stored
+as-is and the response says `pii_scrubbed: false`, so the state is always honest.
+
+### Host the conversational agent (AgentCore Runtime)
+
+This hosts the chat agent that answers "where do I stand?" by calling the deterministic tools. It
+is a separate deploy from the backend above:
 
 ```bash
 pip install bedrock-agentcore-starter-toolkit
@@ -247,9 +274,7 @@ cd server && aws-vault exec terraform-dev --no-session -- agentcore configure --
 aws-vault exec terraform-dev --no-session -- agentcore launch
 aws-vault exec terraform-dev --no-session -- agentcore invoke '{"prompt":"Where do I stand? Education bachelors, CLB 9, age 30, 1yr Cdn work.","session_id":"demo-user"}'
 ```
-`invoke` returns the agent's answer, with every number computed by the deterministic tools. The
-runtime role needs the same `bedrock:InvokeModel` grant from step 8. Knowledge Base, memory, and
-sandbox setup are in `agentcore-runbook.md`.
+Full details (roles, memory, sandbox) are in `agentcore-runbook.md`.
 
 ---
 
@@ -266,5 +291,6 @@ and MapleGuard catches it.
 4. **Hand over the brief** (step 6). One document with the position, the next moves, the letter
    gaps, and the suggested rewrite.
 
-Locally that runs end to end with no AWS (the two AI calls are stubbed). Add steps 8 through 11 for
-the live model, the cloud deployment, and the hosted agent.
+Locally that runs end to end with no AWS (the two AI calls are stubbed). Run step 8 to deploy the
+same thing on AWS with the real AI audit, and see the optional extras if you want live-sourced
+citations, PII redaction, or the hosted chat agent.
