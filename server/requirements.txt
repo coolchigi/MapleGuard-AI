@@ -17,6 +17,12 @@ anthropic>=0.39
 # directly (BedrockModel, AnthropicBedrock, DynamoDB/SNS stores), so declare it explicitly.
 boto3>=1.35
 
+# typing_extensions is imported directly by agent/schemas.py: pydantic needs
+# typing_extensions.TypedDict on Python < 3.12 (the AgentCore runtime is 3.11 today). Present
+# transitively via pydantic, but declared here because we import it directly. Once the runtime is
+# on 3.13 and schemas.py switches back to typing.TypedDict, this line can go.
+typing_extensions>=4.0
+
 # Agent layer + AgentCore seams (optional at runtime; imported lazily).
 # Pinned exactly: Strands' default Bedrock model id changes across releases, and the deployed
 # orchestrator now pins its own model id (agent.config.DEFAULT_BEDROCK_MODEL_ID) — pinning the
