@@ -171,6 +171,35 @@ def test_general_draw_reference_is_explicit_and_cited():
     assert gen["sourceUrl"].endswith("q=294")
 
 
+# --- the hero benchmark is relevant to the profile, not merely the newest --------------
+def test_headline_is_the_recent_draw_relevant_to_the_profile():
+    # A profile with Canadian work: the relevant broad draw is the latest CEC round (439),
+    # even though a newer Healthcare occupations draw (441) tops the feed.
+    ld = build_dashboard(_profile(canadian_work_years=2), as_of=AS_OF, horizon=HORIZON,
+                         benchmark=_feed_benchmark())["lastDraw"]
+    assert ld["relevance"] == "matched"
+    assert ld["name"] == "Canadian Experience Class" and ld["round"] == "439"
+    others = {o["round"]: o for o in ld["others"]}
+    assert "441" in others and others["441"]["relevant"] is None  # newer specialty, demoted
+
+
+def test_headline_matches_an_occupation_category_when_the_noc_is_in_it():
+    # With a Healthcare NOC on file, the Healthcare occupations draw becomes the relevant one.
+    ld = build_dashboard(_profile(noc_code="31301"), as_of=AS_OF, horizon=HORIZON,
+                         benchmark=_feed_benchmark())["lastDraw"]
+    assert ld["relevance"] == "matched"
+    assert "Healthcare" in ld["name"]
+
+
+def test_specialty_draw_the_profile_is_not_in_is_flagged_not_relevant():
+    # No French on the profile -> the French draw is a determinate "not relevant", cited.
+    ld = build_dashboard(_profile(), as_of=AS_OF, horizon=HORIZON,
+                         benchmark=_feed_benchmark())["lastDraw"]
+    french = next((o for o in ld["others"] if o["category"] == "french"), None)
+    assert french is not None and french["relevant"] is False
+    assert french["reason"]
+
+
 # --- shape rules the client depends on -------------------------------------------------
 def test_single_applicant_has_no_spouse_category():
     assert "S" not in _by_code(build_dashboard(_profile(), as_of=AS_OF, horizon=HORIZON))
@@ -327,15 +356,35 @@ def test_endpoint_returns_the_same_document_as_the_builder():
 
 
 def test_endpoint_last_draw_is_sourced_from_the_feed():
-    # Fails if the hero line ever reverts to a hardcoded constant: the score must equal the
-    # latest cutoff in the injected feed, and the citation must link to that exact round.
+    # Fails if the hero line ever reverts to a hardcoded constant: the score/round/source must be
+    # a real cited round from the injected feed, never an invented number.
     body = _client().post("/dashboard",
                           json={"profile": PROFILE_DICT, "as_of": "2026-08-22"}).json()
-    latest = _feed_benchmark()["latest"]
-    assert body["lastDraw"]["available"] is True
-    assert body["lastDraw"]["score"] == latest["score"]
-    assert body["lastDraw"]["round"] == latest["round"]
-    assert body["lastDraw"]["sourceUrl"] == latest["source_url"]
+    ld = body["lastDraw"]
+    assert ld["available"] is True
+    feed_rounds = {r["round"]: r for r in _feed_benchmark()["recent"]}
+    assert ld["round"] in feed_rounds
+    assert ld["score"] == feed_rounds[ld["round"]]["score"]
+    assert ld["sourceUrl"] == feed_rounds[ld["round"]]["source_url"]
+
+
+def test_endpoint_hero_benchmarks_the_relevant_draw_not_the_newest():
+    # Bug 2 regression: the hero benchmarks the draw RELEVANT to the applicant, not merely the
+    # newest round of any kind. The demo profile reports Canadian work, so the relevant broad
+    # draw is the latest Canadian Experience Class round (439), even though newer specialty rounds
+    # (a Healthcare occupations draw) sit on top of the feed.
+    body = _client().post("/dashboard",
+                          json={"profile": PROFILE_DICT, "as_of": "2026-08-22"}).json()
+    ld = body["lastDraw"]
+    assert ld["relevance"] == "matched"
+    assert ld["name"] == "Canadian Experience Class" and ld["round"] == "439"
+    assert ld["score"] == 521 and ld["sourceUrl"].endswith("q=439")
+
+    latest = _feed_benchmark()["latest"]           # the newest round of any kind
+    assert latest["round"] != ld["round"]          # it is NOT the headline
+    others = {o["round"]: o for o in ld["others"]}
+    assert latest["round"] in others               # it is demoted to the comparison list
+    assert others[latest["round"]]["relevant"] is None  # occupation category, no NOC -> unknown
 
 
 def test_endpoint_agrees_with_position_and_trajectory_endpoints():

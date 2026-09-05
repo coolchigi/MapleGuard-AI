@@ -228,24 +228,46 @@ def _additional_category(score: Score, pts: dict[str, int]) -> dict[str, Any]:
 _GENERAL_NOTE = ("Last all-program (general) draw; none since. "
                  "Current draws are category-based.")
 
+# How many recent distinct draws to carry for the "other recent draws" comparison list.
+_RECENT_LIMIT = 8
+
+
+def _rec_dict(r) -> dict:
+    return {"score": r.cutoff, "date": r.date.isoformat(), "name": r.name,
+            "round": r.round_number, "kind": r.kind, "category": r.category,
+            "source_url": r.citation.round_url}
+
 
 def benchmark_from_records(records) -> Optional[dict]:
     """Assemble the draw benchmark from live ingest records, or None when the feed yields no
-    usable draw. `latest` is the most recent cited round (any type, since IRCC's current draws
-    are all category-based); `general` is the most recent all-program round when the latest is
-    itself not general, so the hero line can state, explicitly and cited, that general draws have
-    stopped. Every value here is a real cutoff from a real cited round -- nothing is invented."""
-    from ingest import latest_draw
+    usable draw. This stays profile-agnostic: it gathers the real cited rounds and leaves the
+    choice of WHICH one to headline to `_last_draw_view`, which has the profile.
+
+    `latest` is the most recent cited round of any kind. `recent` is the most recent distinct
+    draws (deduped by category, newest first) so the view can pick the one relevant to the
+    applicant and list the rest. `general` is the most recent all-program round when the latest
+    is not itself general, so the hero can state, cited, that general draws have stopped. Every
+    value is a real cutoff from a real cited round -- nothing is invented."""
+    from ingest import latest_draw, sort_records
 
     latest = latest_draw(records)
     if latest is None:
         return None
 
-    def _rec(r) -> dict:
-        return {"score": r.cutoff, "date": r.date.isoformat(), "name": r.name,
-                "round": r.round_number, "kind": r.kind, "source_url": r.citation.round_url}
+    recent: list[dict] = []
+    seen: set = set()
+    for r in sort_records(records, newest_first=True):
+        if r.cutoff is None or r.needs_manual_check:
+            continue
+        key = (r.kind, r.category)
+        if key in seen:
+            continue
+        seen.add(key)
+        recent.append(_rec_dict(r))
+        if len(recent) >= _RECENT_LIMIT:
+            break
 
-    benchmark = {"latest": _rec(latest), "general": None}
+    benchmark = {"latest": _rec_dict(latest), "recent": recent, "general": None}
     if latest.kind != "general":
         general = latest_draw(records, kind="general")
         if general is not None:
@@ -259,24 +281,106 @@ def _benchmark_from_override(score: int, date: Optional[str]) -> dict:
     """A benchmark built from a caller-supplied cutoff (the `/dashboard` override / tests). It is
     still a real number the caller vouches for, just not fetched here."""
     return {"latest": {"score": score, "date": date, "name": None, "round": None,
-                       "kind": None, "source_url": ROUNDS}, "general": None}
+                       "kind": None, "category": None, "source_url": ROUNDS}, "general": None}
 
 
-def _last_draw_view(benchmark: Optional[dict], total: int) -> dict:
+def _relevance(profile: Profile, draw: dict) -> tuple[Optional[bool], str]:
+    """Is this cited draw relevant to THIS applicant? Deterministic, read off the profile's own
+    fields and the official 2026 category rules. Returns (True / False / None, reason); None means
+    the profile lacks the input to decide (an occupation category with no NOC on file), never a
+    guess. This is a relevance signal for which real draw to headline, not an assertion of
+    eligibility -- that determination stays with IRCC."""
+    kind = draw.get("kind")
+    category = draw.get("category")
+    name = draw.get("name") or ""
+
+    if kind == "general":
+        return True, "every candidate in the pool is measured on CRS"
+    if category == "canadian-experience-class":
+        ok = profile.canadian_work_years >= 1
+        return ok, ("you report Canadian skilled work experience" if ok
+                    else "these rounds invite candidates with Canadian work experience")
+    if category == "provincial-nominee":
+        ok = profile.has_provincial_nomination
+        return ok, ("you hold a provincial nomination" if ok
+                    else "these rounds invite candidates who already hold a provincial nomination")
+    if category == "federal-skilled-worker":
+        return True, "Federal Skilled Worker is a broad skilled-worker program"
+    if category == "federal-skilled-trades":
+        ok = profile.has_certificate_of_qualification
+        return ok, ("you hold a trade certificate of qualification" if ok
+                    else "these rounds invite skilled-trades candidates")
+
+    from ingest import category_eligibility, resolve_category
+    slug = resolve_category(category or name)
+    if slug == "french":
+        sl = profile.second_language
+        clb = sl.min_clb() if (profile.second_language_is_french and sl) else 0
+        res = category_eligibility("french", french_nclc=clb)
+        return res.eligible, res.reason
+    if slug is not None:
+        res = category_eligibility(slug, noc_code=getattr(profile, "noc_code", None))
+        return res.eligible, res.reason
+    return None, "eligibility for this round is not derivable from your profile"
+
+
+def _choose_headline(profile: Profile, benchmark: dict) -> tuple[dict, Optional[str], Optional[str]]:
+    """Pick the real cited round to headline: the most recent draw RELEVANT to this profile.
+    When none is relevant, fall back to a broad program draw (or the newest) flagged 'reference'
+    so the hero can say it is shown for comparison rather than as the applicant's own draw.
+    Returns (headline_draw, relevance, reason)."""
+    recent = benchmark.get("recent")
+    if not recent:
+        # override / test path: only a caller-supplied `latest` is present.
+        return benchmark["latest"], None, None
+
+    scored = [(d, *_relevance(profile, d)) for d in recent]  # recent is newest first
+    matched = [t for t in scored if t[1] is True]
+    if matched:
+        draw, _ok, reason = matched[0]
+        return draw, "matched", reason
+
+    broad = next((t for t in scored if t[0].get("kind") == "general"
+                  or t[0].get("category") in ("canadian-experience-class",
+                                              "federal-skilled-worker")), None)
+    draw = (broad or scored[0])[0]
+    return draw, "reference", "no recent draw matches your profile; shown for reference"
+
+
+def _others(profile: Profile, benchmark: dict, headline: dict) -> list[dict]:
+    """The other recent draws, each flagged relevant / not / unknown to this profile with a cited
+    reason, so specialty rounds the applicant is not in read as secondary, not the headline."""
+    out: list[dict] = []
+    for d in benchmark.get("recent") or []:
+        if d.get("round") == headline.get("round") and d.get("date") == headline.get("date"):
+            continue
+        ok, reason = _relevance(profile, d)
+        out.append({"score": d["score"], "date": d["date"], "name": d["name"],
+                    "round": d["round"], "kind": d["kind"], "category": d.get("category"),
+                    "sourceUrl": d.get("source_url"), "relevant": ok, "reason": reason})
+    return out
+
+
+def _last_draw_view(benchmark: Optional[dict], total: int, profile: Profile) -> dict:
     """The `lastDraw` block the client renders. With no benchmark the comparison is reported
-    unavailable (never a fabricated cutoff); with one, the delta is `total - cutoff` and the real
-    round's name/number/date/source travel with it so the citation links to that exact round."""
+    unavailable (never a fabricated cutoff); with one, the headline is the most recent draw
+    relevant to this profile, the delta is `total - cutoff`, and the real round's
+    name/number/date/source travel with it so the citation links to that exact round. The other
+    recent draws ride along in `others`, each flagged for relevance."""
     if not benchmark or not benchmark.get("latest"):
         return {"available": False, "score": None, "delta": None, "cite": ROUNDS, "date": None,
                 "note": "No draw benchmark available (live rounds feed unreachable)."}
-    latest = benchmark["latest"]
-    view = {"available": True, "score": latest["score"], "delta": total - latest["score"],
-            "name": latest.get("name"), "round": latest.get("round"), "kind": latest.get("kind"),
-            "cite": ROUNDS, "sourceUrl": latest.get("source_url"), "date": latest["date"]}
+    headline, relevance, reason = _choose_headline(profile, benchmark)
+    view = {"available": True, "score": headline["score"], "delta": total - headline["score"],
+            "name": headline.get("name"), "round": headline.get("round"),
+            "kind": headline.get("kind"), "category": headline.get("category"),
+            "relevance": relevance, "matchReason": reason,
+            "cite": ROUNDS, "sourceUrl": headline.get("source_url"), "date": headline["date"]}
     general = benchmark.get("general")
     view["general"] = None if general is None else {
         "score": general["score"], "round": general["round"], "date": general["date"],
         "sourceUrl": general.get("source_url"), "note": _GENERAL_NOTE}
+    view["others"] = _others(profile, benchmark, headline)
     return view
 
 
@@ -347,7 +451,7 @@ def build_dashboard(profile: Profile,
             "additional": score.additional,
             "categories": categories,
         },
-        "lastDraw": _last_draw_view(benchmark, score.total),
+        "lastDraw": _last_draw_view(benchmark, score.total, profile),
         "trajectory": {
             "points": points,
             "cliffs": cliffs,
