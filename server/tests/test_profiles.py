@@ -194,6 +194,23 @@ def test_letter_stored_unscrubbed_is_flagged_not_faked_without_a_guardrail():
     assert store.get("p").reference_letter["letter_text"] == _LETTER_PII
 
 
+def test_bedrock_scrubber_uses_output_source_and_returns_masked_text():
+    # Regression: Bedrock applies PII ANONYMIZE to OUTPUT content only. source="INPUT" silently
+    # returns the text untouched (action=NONE), so the letter would store its PII while the API
+    # reported success. Lock source="OUTPUT" and the masked-text parse.
+    from api.guardrail import BedrockGuardrailScrubber
+    seen = {}
+
+    class _FakeBedrock:
+        def apply_guardrail(self, **kwargs):
+            seen.update(kwargs)
+            return {"action": "GUARDRAIL_INTERVENED", "outputs": [{"text": "worked with {NAME}."}]}
+
+    result = BedrockGuardrailScrubber("gid", version="1", client=_FakeBedrock()).scrub("worked with Jane Doe.")
+    assert seen["source"] == "OUTPUT"
+    assert result.text == "worked with {NAME}." and result.applied and result.intervened
+
+
 # --- 4. THE LOOP: a profile saved via the API is watched by the monitor ----------------
 def test_profile_saved_through_the_api_is_watched_by_the_monitor():
     # ONE store, written by the API and listed by the monitor.

@@ -66,9 +66,14 @@ class BedrockGuardrailScrubber:
     def scrub(self, text: str) -> ScrubResult:
         if not text:
             return ScrubResult(text=text, applied=True)
+        # source="OUTPUT" is deliberate and load-bearing. Bedrock applies PII ANONYMIZE (masking)
+        # to OUTPUT content only; with source="INPUT" the guardrail runs but returns the text
+        # untouched (action=NONE), which would silently store the PII while reporting success.
+        # Verified live: OUTPUT returns action=GUARDRAIL_INTERVENED with the masked text in
+        # outputs[0].text (e.g. "{NAME}", "{EMAIL}", "{PHONE}").
         resp = self._client.apply_guardrail(
             guardrailIdentifier=self._id, guardrailVersion=self._version,
-            source="INPUT", content=[{"text": {"text": text}}])
+            source="OUTPUT", content=[{"text": {"text": text}}])
         outputs = resp.get("outputs") or []
         scrubbed = outputs[0]["text"] if outputs and "text" in outputs[0] else text
         return ScrubResult(text=scrubbed, applied=True,
