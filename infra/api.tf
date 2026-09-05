@@ -62,6 +62,12 @@ resource "aws_iam_role_policy" "api" {
         Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
         Resource = local.bedrock_invoke_resources
       },
+      {
+        # Apply the PII guardrail to scrub reference letters on write.
+        Effect   = "Allow"
+        Action   = ["bedrock:ApplyGuardrail"]
+        Resource = [aws_bedrock_guardrail.pii[0].guardrail_arn]
+      },
     ]
   })
 }
@@ -85,6 +91,10 @@ resource "aws_lambda_function" "api" {
       # NOC audit/draft on Bedrock with the runtime role's creds (no ANTHROPIC_API_KEY).
       MAPLEGUARD_NOC_BACKEND   = "bedrock"
       MAPLEGUARD_BEDROCK_MODEL = var.bedrock_model_id
+      # Scrub PII from reference letters on write via the Bedrock Guardrail (see guardrail.tf).
+      MAPLEGUARD_GUARDRAIL_ID      = aws_bedrock_guardrail.pii[0].guardrail_id
+      MAPLEGUARD_GUARDRAIL_VERSION = aws_bedrock_guardrail_version.pii[0].version
+      MAPLEGUARD_GUARDRAIL_REGION  = var.region
     }
   }
 }
