@@ -1,6 +1,59 @@
 import React from "react";
-import type { Category, DashboardData, Lever, LineItem } from "@/data/types";
+import type { Category, DashboardData, Lever, LineItem, RecentDraw } from "@/data/types";
 import { Cite, Guilloche, Masthead, MrzStrip, Stamp } from "./atoms";
+
+/** The other recent draws, so a specialty round the applicant is not in reads as secondary
+ *  rather than as the headline. `relevant` is true / false / null (null = not derivable from the
+ *  profile, e.g. an occupation category with no NOC on file). */
+function OtherDraws({ draws }: { draws: RecentDraw[] }) {
+  const tag = (r: boolean | null) =>
+    r === true
+      ? { label: "RELEVANT TO YOU", color: "var(--maple)" }
+      : r === false
+        ? { label: "NOT YOUR CATEGORY", color: "var(--muted-3)" }
+        : { label: "NEEDS YOUR NOC", color: "var(--muted-3)" };
+  return (
+    <div style={{ margin: "30px 0 0" }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--muted)", marginBottom: 10 }}>
+        OTHER RECENT DRAWS · WHAT’S RELEVANT TO YOU
+      </div>
+      {draws.map((d) => {
+        const t = tag(d.relevant);
+        const muted = d.relevant !== true;
+        return (
+          <div
+            key={`${d.round}-${d.date}`}
+            className="gc"
+            style={{
+              display: "grid", gridTemplateColumns: "1fr auto", gap: "2px 16px",
+              alignItems: "baseline", padding: "9px 0",
+              color: muted ? "var(--muted-2)" : "var(--ink)",
+            }}
+          >
+            <span style={{ fontFamily: "var(--serif)", fontSize: 15 }}>
+              {d.sourceUrl ? (
+                <a href={d.sourceUrl} target="_blank" rel="noopener noreferrer"
+                   style={{ color: "inherit", textDecoration: "none" }}>
+                  {d.name}
+                </a>
+              ) : d.name}
+              {d.round ? <span style={{ color: "var(--muted-2)" }}> · round {d.round}</span> : null}
+            </span>
+            <span className="tabnum" style={{ fontFamily: "var(--sans)", fontWeight: 700, textAlign: "right" }}>
+              {d.score}
+            </span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.08em", color: t.color }}>
+              {t.label}
+            </span>
+            <span style={{ fontFamily: "var(--serif)", fontStyle: "italic", fontSize: 12, color: "var(--muted-2)", textAlign: "right" }}>
+              {d.reason}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function CategoryHeader({ cat }: { cat: Category }) {
   const zero = cat.subtotal === 0;
@@ -131,6 +184,15 @@ export function PositionPanel({ data }: { data: DashboardData }) {
                     <>canada.ca/rounds-of-invitations · {lastDraw.date}</>
                   )}
                 </Cite>
+                {lastDraw.relevance === "matched" && lastDraw.matchReason ? (
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: "8px 0 0", maxWidth: 360, lineHeight: 1.5 }}>
+                    The draw relevant to your profile: {lastDraw.matchReason}.
+                  </p>
+                ) : lastDraw.relevance === "reference" ? (
+                  <p style={{ fontSize: 11, color: "var(--muted)", margin: "8px 0 0", maxWidth: 360, lineHeight: 1.5 }}>
+                    No recent draw matches your profile; shown for comparison.
+                  </p>
+                ) : null}
                 {lastDraw.general ? (
                   <p style={{ fontSize: 11, color: "var(--muted)", margin: "8px 0 0", maxWidth: 360, lineHeight: 1.5 }}>
                     No all-program (general) draw since round {lastDraw.general.round} on{" "}
@@ -161,6 +223,10 @@ export function PositionPanel({ data }: { data: DashboardData }) {
           eligibility — that determination is{" "}
           <span style={{ fontStyle: "normal", fontWeight: 700, color: "var(--ink)" }}>IRCC’s</span>.”
         </p>
+
+        {lastDraw.others && lastDraw.others.length > 0 ? (
+          <OtherDraws draws={lastDraw.others} />
+        ) : null}
 
         <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--muted)", margin: "30px 0 16px" }}>
           HOW THIS NUMBER IS BUILT

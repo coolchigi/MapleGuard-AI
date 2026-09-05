@@ -97,6 +97,9 @@
     "name": "Canadian Experience Class",
     "round": "439",
     "kind": "category",
+    "category": "canadian-experience-class",
+    "relevance": "matched",
+    "matchReason": "you report Canadian skilled work experience",
     "cite": "canada.ca/rounds-of-invitations",
     "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=439",
     "date": "2026-09-01",
@@ -106,7 +109,86 @@
       "date": "2024-04-23",
       "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=294",
       "note": "Last all-program (general) draw; none since. Current draws are category-based."
-    }
+    },
+    "others": [
+      {
+        "score": 475,
+        "date": "2026-09-04",
+        "name": "Healthcare and Social Services Occupations, 2026-Version 3",
+        "round": "441",
+        "kind": "category",
+        "category": "healthcare-and-social-services-occupations",
+        "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=441",
+        "relevant": null,
+        "reason": "provide the candidate's NOC code to check this category"
+      },
+      {
+        "score": 198,
+        "date": "2026-09-03",
+        "name": "Physicians with Canadian Work Experience, 2026-Version 1",
+        "round": "440",
+        "kind": "category",
+        "category": "physicians-with-canadian-work-experience",
+        "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=440",
+        "relevant": null,
+        "reason": "provide the candidate's NOC code to check this category"
+      },
+      {
+        "score": 697,
+        "date": "2026-08-31",
+        "name": "Provincial Nominee Program",
+        "round": "438",
+        "kind": "category",
+        "category": "provincial-nominee",
+        "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=438",
+        "relevant": false,
+        "reason": "these rounds invite candidates who already hold a provincial nomination"
+      },
+      {
+        "score": 382,
+        "date": "2026-08-19",
+        "name": "French-Language proficiency 2026-Version 2",
+        "round": "437",
+        "kind": "category",
+        "category": "french",
+        "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=437",
+        "relevant": false,
+        "reason": "French NCLC 0 across abilities is below the NCLC 7 requirement"
+      },
+      {
+        "score": 477,
+        "date": "2026-04-02",
+        "name": "Trades Occupations, 2026-Version 3",
+        "round": "408",
+        "kind": "category",
+        "category": "trades-occupations",
+        "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=408",
+        "relevant": null,
+        "reason": "provide the candidate's NOC code to check this category"
+      },
+      {
+        "score": 529,
+        "date": "2024-04-23",
+        "name": "General",
+        "round": "294",
+        "kind": "general",
+        "category": null,
+        "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=294",
+        "relevant": true,
+        "reason": "every candidate in the pool is measured on CRS"
+      },
+      {
+        "score": 491,
+        "date": "2024-04-11",
+        "name": "STEM occupations (Version 1)",
+        "round": "293",
+        "kind": "category",
+        "category": "stem-occupations",
+        "sourceUrl": "https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/ministerial-instructions/express-entry-rounds/invitations.html?q=293",
+        "relevant": null,
+        "reason": "provide the candidate's NOC code to check this category"
+      }
+    ]
   },
   "trajectory": {
     "points": [

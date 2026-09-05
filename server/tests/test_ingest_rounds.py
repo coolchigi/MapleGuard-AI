@@ -32,7 +32,7 @@ def _by_number(records, number):
 
 # --- Fixture shape ------------------------------------------------------------------
 def test_fixture_parses_every_round(records):
-    assert len(records) == 12
+    assert len(records) == 14
     assert all(isinstance(r, DrawRecord) for r in records)
 
 
@@ -161,7 +161,7 @@ def test_record_as_dict_is_serializable(records):
 
 def test_parse_rounds_json_string_entrypoint():
     recs = parse_rounds_json(FIXTURE.read_text(), fetched=FETCHED)
-    assert len(recs) == 12
+    assert len(recs) == 14
 
 
 # --- Optional live fetch (real network), only when explicitly enabled ---------------

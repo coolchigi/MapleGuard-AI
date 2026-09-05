@@ -137,7 +137,14 @@ export type DashboardData = {
     name?: string | null;
     round?: string | null;
     kind?: string | null;
+    category?: string | null;
     sourceUrl?: string | null;
+    /** How the headline draw relates to this profile: "matched" (a draw relevant to the
+     *  applicant), "reference" (no recent draw matched, shown for comparison), or null on the
+     *  override path. */
+    relevance?: "matched" | "reference" | null;
+    /** Cited reason the headline draw is (or is not) relevant to this profile. */
+    matchReason?: string | null;
     /** Set only when unavailable: why there is no benchmark. */
     note?: string;
     /** The last all-program (general) draw, shown explicitly since none has run since 2024. */
@@ -148,6 +155,9 @@ export type DashboardData = {
       sourceUrl?: string | null;
       note: string;
     } | null;
+    /** The other recent draws, each flagged for relevance to this profile so specialty rounds
+     *  the applicant is not in read as secondary rather than as the headline. */
+    others?: RecentDraw[];
   };
   trajectory: {
     points: TrajectoryPoint[];
@@ -158,6 +168,20 @@ export type DashboardData = {
     daysToExpiry: number | null;
     endTotal: number;
   };
+};
+
+/** One recent draw in the hero's comparison list. `relevant` is true/false/null (null =
+ *  eligibility not derivable from the profile, e.g. an occupation category with no NOC on file). */
+export type RecentDraw = {
+  score: number;
+  date: string;
+  name: string;
+  round: string;
+  kind: string | null;
+  category: string | null;
+  sourceUrl?: string | null;
+  relevant: boolean | null;
+  reason: string;
 };
 
 /** The bundled `demo.json` is a `DashboardData`; the alias keeps the older name working. */
