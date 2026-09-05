@@ -1,0 +1,51 @@
+name: CI
+
+# Run the test suite on the Python versions the deployed system runs, so a version-specific
+# failure (like the pydantic / typing.TypedDict crash that only shows on 3.11) is caught in a PR
+# instead of at AgentCore container init.
+#
+# Matrix, during the 3.11 -> 3.13 runtime migration:
+#   3.11  the AgentCore runtime version live today (runtime_type: PYTHON_3_11)
+#   3.13  the version we are moving the runtime to (AWS-recommended; drops the typing_extensions shim)
+# Drop the 3.11 leg once the runtime is redeployed as PYTHON_3_13 and the shim is removed.
+#
+# Local dev is 3.14 and stays useful, but green-on-3.14 alone is NOT a deploy gate: 3.14 did not
+# reproduce the 3.11 init crash. This workflow is the gate.
+#
+# Note on scope: the AgentCore runtime is linux/arm64, GitHub's ubuntu runner is x86_64. The suite
+# is pure Python with injected fakes and no arch-specific compiled path under test, so this validates
+# the Python-VERSION dimension. It does not validate arm64 native-wheel packaging; that is a separate
+# concern handled at deploy (uv --python-platform aarch64-manylinux2014).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    name: tests (py${{ matrix.python-version }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt pytest
+
+      - name: Run tests
+        working-directory: server
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q
