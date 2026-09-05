@@ -12,7 +12,12 @@ validation stays in `serde`, which raises on a malformed profile rather than def
 """
 from __future__ import annotations
 
-from typing import Optional, Required, TypedDict
+from typing import Optional
+
+# TypedDict (and Required) come from typing_extensions, not typing: pydantic requires
+# typing_extensions.TypedDict on Python < 3.12 (the AgentCore runtime is python3.11), and it works
+# identically on newer Pythons, so this import is correct on every version.
+from typing_extensions import Required, TypedDict
 
 from crs.models import EducationLevel, MaritalStatus
 

@@ -1,20 +1,27 @@
-"""Module-level AgentCore Runtime entrypoint for `agentcore configure` / `agentcore launch`.
+"""Module-level AgentCore Runtime entrypoint for `agentcore configure` / `agentcore deploy`.
 
-The AgentCore starter toolkit hosts a module that exposes a `BedrockAgentCoreApp` at module
-scope with a `@app.entrypoint` handler. `runtime.build_app()` builds exactly that (wiring the
-environment-selected backends and the two policy gates); this module just exposes it as `app`
-so the CLI can find it:
+AgentCore Runtime executes this file as a TOP-LEVEL SCRIPT (its `__package__` is empty), so a
+relative import like `from .runtime import build_app` fails with "attempted relative import with no
+known parent package" and the container crashes at startup (surfaced by the runtime as a generic
+"initialization time exceeded"). To avoid that, put the server root (the parent of this `agent/`
+directory) on `sys.path` and import `agent.runtime` ABSOLUTELY. That makes `agent` a real package,
+so `runtime.py` and everything it pulls in can use their normal relative imports.
+
+`runtime.build_app()` is import-cheap: creating the app and registering the handler does no network
+I/O. The pinned Bedrock model, NOC clients, cited corpus, and tracing build once on the first
+invocation and are cached, so the HTTP server answers AgentCore Runtime's /ping health check inside
+the 30-second init window.
 
     cd server
     agentcore configure --entrypoint agent/agentcore_app.py
-    agentcore launch
-
-Importing this module constructs the real Strands agent and requires `bedrock_agentcore` +
-`strands`, so it is NEVER imported by the package `__init__` or the tests — it is only imported
-inside the AgentCore container. The offline request logic lives in `runtime.handle`, which is
-tested with a fake model and no AWS.
+    agentcore deploy
 """
-from .runtime import build_app
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from agent.runtime import build_app  # noqa: E402  (must follow the sys.path insert above)
 
 app = build_app()
 

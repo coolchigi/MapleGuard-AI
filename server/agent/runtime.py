@@ -15,6 +15,7 @@ touching the orchestration logic.
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any, Optional
 
 from .orchestrator import build_orchestrator, screen_response
@@ -112,6 +113,48 @@ def _shared_deploy_pieces(model: Any = None) -> dict:
     return pieces
 
 
+# --- Lazy warm-up for the hosted runtime -----------------------------------------------
+# AgentCore Runtime kills a container whose HTTP server does not answer /ping within 30s of
+# start. Building the pinned Bedrock model, the NOC clients, the cited corpus, and the tracing
+# exporter all do network I/O, so NONE of it runs at import or in `build_app`. It is built once on
+# the first real invocation and cached, keyed nowhere (process-global) because the pieces are
+# identical for every caller. Per-caller state (the session, the fresh agent) is still built per
+# request in the entrypoint below.
+_shared_lock = threading.Lock()
+_shared_cache: Optional[dict] = None
+_tracing_started = False
+
+
+def _start_tracing_once() -> None:
+    """Enable OTLP span export exactly once, on the first request. Deferred off import so tracing
+    setup (which reads OTEL_EXPORTER_OTLP_ENDPOINT and may open an exporter) cannot eat the init
+    budget. Never fatal: a failure leaves the agent untraced."""
+    global _tracing_started
+    if _tracing_started:
+        return
+    try:
+        from .observability import enable_tracing
+        enable_tracing(console=False)
+    except Exception:  # pragma: no cover - tracing must never block a request
+        logger.warning("tracing setup failed; the agent runs untraced")
+    _tracing_started = True
+
+
+def _shared_pieces_cached() -> dict:
+    """The env-selected orchestrator pieces (pinned Bedrock model, NOC clients, cited corpus),
+    built once on first use and cached. Thread-safe: if two requests race on a cold start, one
+    builds and the other reuses. After that it is a lock-free read of the cache."""
+    global _shared_cache
+    if _shared_cache is not None:
+        return _shared_cache
+    with _shared_lock:
+        if _shared_cache is None:
+            logger.info("first invocation: building shared deploy pieces "
+                        "(pinned model, NOC clients, cited corpus)")
+            _shared_cache = _shared_deploy_pieces()
+    return _shared_cache
+
+
 def build_orchestrator_from_env(model: Any = None):
     """Build one orchestrator wired to the deploy backends the environment selects: the pinned
     Bedrock model, the Bedrock-backed NOC clients, the cited corpus, and the MapleGuard trace
@@ -137,12 +180,16 @@ def _session_manager_for(session_id: Optional[str], deployment: Any) -> Optional
 def build_app(model: Any = None, from_env: bool = True):
     """Wrap the entrypoint in a `BedrockAgentCoreApp` for hosting. Requires AgentCore.
 
-    Expensive backends (the pinned Bedrock model, NOC clients, seeded corpus) are built ONCE via
-    `_shared_deploy_pieces`. Each invocation then builds a FRESH agent over those pieces, keyed by
-    the caller's AgentCore session id, so conversation state never bleeds between callers and the
-    per-user AgentCore Memory profile is restored when that backend is configured. Tracing is
-    enabled so the loop is visible in CloudWatch GenAI Observability. Returns the app so the caller
-    can `app.run()`.
+    Import-cheap by design. Constructing the app and registering the handler does NO network I/O,
+    so the container's HTTP server starts and answers AgentCore Runtime's /ping health check well
+    inside the 30s init budget. The expensive backends (pinned Bedrock model, NOC clients, cited
+    corpus) and tracing are built once on the FIRST invocation and cached (see
+    `_shared_pieces_cached` / `_start_tracing_once`).
+
+    Each invocation then builds a FRESH agent over those cached pieces, keyed by the caller's
+    AgentCore session id, so conversation state never bleeds between callers and the per-user
+    AgentCore Memory profile is restored when that backend is configured. Returns the app so the
+    caller can `app.run()`.
     """
     try:
         from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -154,20 +201,18 @@ def build_app(model: Any = None, from_env: bool = True):
 
     app = BedrockAgentCoreApp()
 
-    # Export MapleGuard's spans (stamped with the trust-posture attributes) to the OTLP collector
-    # AgentCore Runtime provides via OTEL_EXPORTER_OTLP_ENDPOINT. Never blocks hosting.
-    try:
-        from .observability import enable_tracing
-        enable_tracing(console=False)
-    except Exception:  # pragma: no cover - tracing must never block hosting
-        logger.warning("tracing setup failed; the agent runs untraced")
-
-    pieces = _shared_deploy_pieces(model) if from_env else {"model": model}
     from .config import Deployment
-    deployment = Deployment.from_env()
+    deployment = Deployment.from_env()  # env reads only; cheap and safe at build time
+    # An injected model (tests / offline) is used verbatim and needs no warm-up. Captured here so
+    # the request path does not re-read the argument. None on the deploy path.
+    injected = None if from_env else {"model": model}
 
     @app.entrypoint
     def invoke(payload: dict, context: Any = None) -> dict:
+        # First request warms up: enable tracing and build the shared pieces once (both no-ops
+        # thereafter). Deferring this off import is what keeps /ping under the 30s init budget.
+        _start_tracing_once()
+        pieces = injected if injected is not None else _shared_pieces_cached()
         session_id = getattr(context, "session_id", None) or (payload or {}).get("session_id")
         session_manager = _session_manager_for(session_id, deployment)
         agent = build_orchestrator(session_manager=session_manager, **pieces)
