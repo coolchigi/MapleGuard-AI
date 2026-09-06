@@ -1,0 +1,247 @@
+{
+  "version": "NOC 2021 Version 1.0",
+  "fetched": "2026-09-06",
+  "source_base": "https://noc.esdc.gc.ca/Structure/NOCProfile",
+  "occupations": [
+    {
+      "code": "21230",
+      "title": "Computer systems developers and programmers",
+      "lead_statement": "Computer systems developers and programmers write, modify, integrate and test computer code for software applications, data processing applications, operating systems-level software and communications software. They are employed in computer software development firms, information technology consulting firms, and in information technology units throughout the private and public sectors.",
+      "main_duties": [
+        {
+          "id": "21230.1",
+          "text": "Write, modify, integrate and test software code",
+          "optional": false
+        },
+        {
+          "id": "21230.2",
+          "text": "Maintain existing computer programs by making modifications as required",
+          "optional": false
+        },
+        {
+          "id": "21230.3",
+          "text": "Identify and communicate technical problems, processes and solutions",
+          "optional": false
+        },
+        {
+          "id": "21230.4",
+          "text": "Prepare reports, manuals and other documentation on the status, operation and maintenance of software",
+          "optional": false
+        },
+        {
+          "id": "21230.5",
+          "text": "Assist in the collection and documentation of user requirements",
+          "optional": false
+        },
+        {
+          "id": "21230.6",
+          "text": "Assist in the development of logical and physical specifications",
+          "optional": false
+        },
+        {
+          "id": "21230.7",
+          "text": "May lead and coordinate teams of computer programmers",
+          "optional": true
+        },
+        {
+          "id": "21230.8",
+          "text": "May research and evaluate a variety of software products.",
+          "optional": true
+        }
+      ],
+      "source": "https://noc.esdc.gc.ca/Structure/NOCProfile?GocTemplateCulture=en-CA&code=21230&version=2021.0",
+      "version": "NOC 2021 Version 1.0",
+      "verified": true,
+      "teer": 1,
+      "content_hash": "73f179d5b4482f5b5a064dabfd06c7c279658fffa4a9ade4d360b5ef5e3f935a",
+      "fetched": "2026-09-06",
+      "verification_note": "deterministic source-match against the fetched page"
+    },
+    {
+      "code": "21231",
+      "title": "Software engineers and designers",
+      "lead_statement": "Software engineers and designers research, design, evaluate, integrate and maintain software applications, technical environments, operating systems, embedded software, information warehouses and telecommunications software. They are employed in information technology consulting firms, information technology research and development firms, and information technology units throughout the private and public sectors, or they may be self-employed.",
+      "main_duties": [
+        {
+          "id": "21231.1",
+          "text": "Collect and document users' requirements and develop logical and physical specifications",
+          "optional": false
+        },
+        {
+          "id": "21231.2",
+          "text": "Research, evaluate and synthesize technical information to design, develop and test computer-based systems including mobile applications",
+          "optional": false
+        },
+        {
+          "id": "21231.3",
+          "text": "Develop data, process and network models to optimize architecture and to evaluate the performance and reliability of designs",
+          "optional": false
+        },
+        {
+          "id": "21231.4",
+          "text": "Plan, design and coordinate the development, installation, integration and operation of computer-based systems including mobile applications",
+          "optional": false
+        },
+        {
+          "id": "21231.5",
+          "text": "Assess, test, troubleshoot, document, upgrade and develop maintenance procedures for operating systems, communications environments and applications software",
+          "optional": false
+        },
+        {
+          "id": "21231.6",
+          "text": "May lead and coordinate teams of information systems professionals in the development of software and integrated information systems, process control software and other embedded software control systems.",
+          "optional": true
+        }
+      ],
+      "source": "https://noc.esdc.gc.ca/Structure/NOCProfile?GocTemplateCulture=en-CA&code=21231&version=2021.0",
+      "version": "NOC 2021 Version 1.0",
+      "verified": true,
+      "teer": 1,
+      "content_hash": "53350a04ef4786d3163a9aac278c6e0d87e5031baf0adc8e06771d0deb28a02c",
+      "fetched": "2026-09-06",
+      "verification_note": "deterministic source-match against the fetched page"
+    },
+    {
+      "code": "21232",
+      "title": "Software developers and programmers",
+      "lead_statement": "Software developers and programmers design, write, and test code for new systems and software to ensure efficiency. They create the foundations for operative systems and run diagnostic programs to certify effectiveness. They are employed in computer software, computer and video game development firms, information technology consulting firms, and in information technology units throughout the private and public sectors.",
+      "main_duties": [
+        {
+          "id": "21232.1",
+          "text": "Design, write, read, test, and correct code for new software",
+          "optional": false
+        },
+        {
+          "id": "21232.2",
+          "text": "Analyze information to recommend and plan the installation of new systems or modifications of an existing system",
+          "optional": false
+        },
+        {
+          "id": "21232.3",
+          "text": "Evaluate simple interrelationships between programs such as whether a contemplated change in one part of a program would cause unwanted results in a related part",
+          "optional": false
+        },
+        {
+          "id": "21232.4",
+          "text": "Program animation software to predefined specifications for interactive video games, Internet and mobile applications",
+          "optional": false
+        },
+        {
+          "id": "21232.5",
+          "text": "Write, modify, integrate and test software code for e-commerce, Internet and mobile applications",
+          "optional": false
+        },
+        {
+          "id": "21232.6",
+          "text": "Develop, implement, modify and maintain gameplay features that integrate effectively into existing software",
+          "optional": false
+        },
+        {
+          "id": "21232.7",
+          "text": "Write documentation for new and updated software.",
+          "optional": false
+        }
+      ],
+      "source": "https://noc.esdc.gc.ca/Structure/NOCProfile?GocTemplateCulture=en-CA&code=21232&version=2021.0",
+      "version": "NOC 2021 Version 1.0",
+      "verified": true,
+      "teer": 1,
+      "content_hash": "533543c3a3805829a5d96476e1ddbe730872eb8ff35cddd7d74e830674813377",
+      "fetched": "2026-09-06",
+      "verification_note": "deterministic source-match against the fetched page"
+    },
+    {
+      "code": "21233",
+      "title": "Web designers",
+      "lead_statement": "Web designers develop and create the visual presentation, layout and functionality of the Web sites and related applications. They are responsible for ensuring that the Web site is easy to use, and that the information is easy to access. Web designers are employed in computer software development firms, information technology consulting firms, information technology units throughout the private and public sectors, advertising agencies or they may be self-employed.",
+      "main_duties": [
+        {
+          "id": "21233.1",
+          "text": "Establish design guidelines, standards and optimal design practices",
+          "optional": false
+        },
+        {
+          "id": "21233.2",
+          "text": "Maintain the appearance of Web sites by applying content standards",
+          "optional": false
+        },
+        {
+          "id": "21233.3",
+          "text": "Designing visual imagery for Web sites and ensuring that it is consistent with the organization image",
+          "optional": false
+        },
+        {
+          "id": "21233.4",
+          "text": "Integrate features and functionalities into Web sites",
+          "optional": false
+        },
+        {
+          "id": "21233.5",
+          "text": "Create and optimize content for the Web site using a variety of graphics, database, animation and other software",
+          "optional": false
+        },
+        {
+          "id": "21233.6",
+          "text": "Test and improve the design of a Web site",
+          "optional": false
+        },
+        {
+          "id": "21233.7",
+          "text": "May lead and coordinate multidisciplinary teams to develop Web site graphics, content, capacity and interactivity",
+          "optional": true
+        }
+      ],
+      "source": "https://noc.esdc.gc.ca/Structure/NOCProfile?GocTemplateCulture=en-CA&code=21233&version=2021.0",
+      "version": "NOC 2021 Version 1.0",
+      "verified": true,
+      "teer": 1,
+      "content_hash": "123018845f7013276b37836ac109e0b4523f028d4e4a009ee1ada607dea7e352",
+      "fetched": "2026-09-06",
+      "verification_note": "deterministic source-match against the fetched page"
+    },
+    {
+      "code": "21234",
+      "title": "Web developers and programmers",
+      "lead_statement": "Web developers and programmers use a variety of programming languages to design, create and modify Web sites. They analyze users’ needs to implement content, graphics, performance, and Web site capacity. They may also integrate Web sites with other computer applications. They are employed in computer software development firms, information technology consulting firms, information technology units throughout the private and public sectors, advertising agencies or they may be self-employed.",
+      "main_duties": [
+        {
+          "id": "21234.1",
+          "text": "Develop, write, modify, integrate and test Web site related code and Web application interfaces",
+          "optional": false
+        },
+        {
+          "id": "21234.2",
+          "text": "Conduct tests and analyze data to monitor quality, security, user interface experiences and to identify areas for improvement",
+          "optional": false
+        },
+        {
+          "id": "21234.3",
+          "text": "Develop and implement procedures for ongoing Web site revision",
+          "optional": false
+        },
+        {
+          "id": "21234.4",
+          "text": "Monitor and maintain Web site functionality",
+          "optional": false
+        },
+        {
+          "id": "21234.5",
+          "text": "May participate in Web site architecture and design in collaboration with designers or clients",
+          "optional": true
+        },
+        {
+          "id": "21234.6",
+          "text": "May research and evaluate a variety of interactive media software products.",
+          "optional": true
+        }
+      ],
+      "source": "https://noc.esdc.gc.ca/Structure/NOCProfile?GocTemplateCulture=en-CA&code=21234&version=2021.0",
+      "version": "NOC 2021 Version 1.0",
+      "verified": true,
+      "teer": 1,
+      "content_hash": "036f31923051514706daeefc7275144a8144a46a1d329978a3a7d48180585d0c",
+      "fetched": "2026-09-06",
+      "verification_note": "deterministic source-match against the fetched page"
+    }
+  ]
+}
