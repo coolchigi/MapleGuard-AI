@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Optional
 
-from .gates import forbidden_tools, never_assert_eligibility, never_submit
+from .gates import (forbidden_tools, never_assert_eligibility, never_assert_unsourced_draw,
+                    never_submit)
 from .tools import MAPLEGUARD_TOOLS, configure_deps
 
 SYSTEM_PROMPT = """\
@@ -45,6 +46,13 @@ Absolute rules, in order of importance:
    its source. Repeat that citation when you state the value. If something is not verified
    (a tool marks needs_verification or needs_manual_check), say so plainly and do not
    present it as settled.
+
+5. NEVER state an Express Entry draw cutoff, a recent-draw number, or a draw trend from your
+   own knowledge. Draw numbers change constantly and a wrong one can sink an application. If
+   the user asks about recent draws, cutoffs, or how their score compares to draws, call
+   get_recent_draws and report only what it returns, each with its canada.ca source. If you
+   have not called that tool, do not mention draw numbers or ranges at all: say you need to
+   look up the latest draws. "Recent draws are around 480" from memory is forbidden.
 
 How to work: read the user's situation, call the tools to compute their position, then
 explain the results in plain language with the citations attached. When a letter is
@@ -111,7 +119,8 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
                        system_prompt: Optional[str] = None,
                        memory: Any = None, session_manager: Any = None,
                        state: Any = None, corpus: Any = None,
-                       trace_attributes: Any = None, classifier: Any = None):
+                       trace_attributes: Any = None, classifier: Any = None,
+                       draws_fetcher: Any = None):
     """Construct the MapleGuard Strands agent.
 
     Args:
@@ -139,7 +148,8 @@ def build_orchestrator(model: Any = None, tools: Optional[list] = None,
 
     tools = MAPLEGUARD_TOOLS if tools is None else tools
     assert_no_forbidden_tools(tools)
-    configure_deps(matcher=matcher, corrector=corrector, corpus=corpus, classifier=classifier)
+    configure_deps(matcher=matcher, corrector=corrector, corpus=corpus, classifier=classifier,
+                   draws_fetcher=draws_fetcher)
     gate = make_policy_gate()
     kwargs: dict[str, Any] = {}
     if memory is not None:
@@ -183,8 +193,13 @@ def build_dev_orchestrator(session_id: str, profile: Optional[dict] = None, mode
 
 
 def screen_response(text: str):
-    """Apply the never-assert-eligibility gate to a final response string. Returns the
-    `GateDecision`; the runtime calls this before emitting the model's answer, so an
-    eligibility verdict is blocked deterministically even if the prompt failed to prevent
-    it. Kept here (not in the hook) because this gate guards TEXT, not tool calls."""
-    return never_assert_eligibility(text)
+    """Apply the text gates to a final response string, returning the first `GateDecision` that
+    blocks (else the last allow). The runtime calls this before emitting the model's answer, so
+    both an eligibility verdict and an uncited draw cutoff are blocked deterministically even if
+    the prompt failed to prevent them. Kept here (not in the hook) because these gates guard
+    TEXT, not tool calls."""
+    for gate in (never_assert_eligibility, never_assert_unsourced_draw):
+        decision = gate(text)
+        if not decision.allowed:
+            return decision
+    return decision
