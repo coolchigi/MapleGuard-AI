@@ -19,10 +19,11 @@ import os
 import pytest
 
 from agent import (GateDecision, MAPLEGUARD_TOOLS, SYSTEM_PROMPT, configure_deps,
-                   forbidden_tools, handle, never_assert_eligibility, never_submit)
+                   forbidden_tools, handle, never_assert_eligibility,
+                   never_assert_unsourced_draw, never_submit)
 from agent.orchestrator import screen_response, tool_name
 from agent.tools import (audit_reference_letter, compute_crs, crs_deadlines, crs_trajectory,
-                         ingest_draws, reachable_paths, sirs_bc)
+                         get_recent_draws, ingest_draws, reachable_paths, sirs_bc)
 from crs import Profile, crs
 
 PROFILE = {
@@ -39,8 +40,8 @@ def test_all_tools_registered_and_named():
     names = [tool_name(t) for t in MAPLEGUARD_TOOLS]
     assert names == [
         "compute_crs", "crs_trajectory", "crs_deadlines", "sirs_bc",
-        "reachable_paths", "ingest_draws", "audit_reference_letter", "draft_corrected_letter",
-        "classify_policy_change",
+        "reachable_paths", "get_recent_draws", "ingest_draws", "audit_reference_letter",
+        "draft_corrected_letter", "classify_policy_change",
     ]
 
 
@@ -109,6 +110,52 @@ def test_ingest_draws_parses_cited_records_without_network():
     assert all(isinstance(d["cutoff"], int) for d in out["draws"])
 
 
+def _fixture_rounds_doc() -> str:
+    import pathlib
+    return (pathlib.Path(__file__).parent.parent / "ingest" / "fixtures"
+            / "ee_rounds_sample.json").read_text()
+
+
+def test_get_recent_draws_returns_cited_newest_first_without_network():
+    # Inject a fetcher that returns the fixture, so the tool runs offline (no live IRCC fetch).
+    from ingest import ROUNDS_JSON_URL
+    configure_deps(draws_fetcher=_fixture_rounds_doc)
+    try:
+        out = get_recent_draws(limit=3)
+    finally:
+        configure_deps()  # reset to defaults (live fetcher)
+    assert out["source_url"] == ROUNDS_JSON_URL
+    assert 1 <= len(out["draws"]) <= 3, "should return up to `limit` usable draws"
+    # Newest first: dates are non-increasing.
+    dates = [d["date"] for d in out["draws"]]
+    assert dates == sorted(dates, reverse=True)
+    # Every returned draw carries a real cutoff and its canada.ca provenance.
+    for d in out["draws"]:
+        assert isinstance(d["cutoff"], int)
+        assert d["provenance"]["round_number"] and d["provenance"]["source_url"]
+
+
+def test_get_recent_draws_can_filter_by_kind():
+    configure_deps(draws_fetcher=_fixture_rounds_doc)
+    try:
+        general = get_recent_draws(limit=50, kind="general")
+    finally:
+        configure_deps()
+    assert all(d["kind"] == "general" for d in general["draws"])
+
+
+def test_get_recent_draws_reports_fetch_failure_instead_of_guessing():
+    def broken_fetcher():
+        raise RuntimeError("network down")
+
+    configure_deps(draws_fetcher=broken_fetcher)
+    try:
+        out = get_recent_draws()
+    finally:
+        configure_deps()
+    assert out["draws"] == [] and "could not fetch" in out["error"]
+
+
 def test_audit_tool_returns_cited_report_with_injected_fake_matcher():
     # Fake matcher: claims two verbatim duties; the deterministic scorer/validator do the
     # rest. No network, no real model.
@@ -155,9 +202,34 @@ def test_never_assert_eligibility_blocks_verdicts_but_allows_cited_facts():
         assert never_assert_eligibility(fact).allowed is True
 
 
-def test_screen_response_is_the_never_assert_gate():
+def test_never_assert_unsourced_draw_blocks_uncited_draw_claims():
+    # The exact hallucination we saw live, and other uncited draw statements: blocked.
+    for claim in [
+        "Recent general Express Entry draws have had cutoffs ranging from the mid-400s to low 500s.",
+        "The last draw's cutoff was around 480.",
+        "Recent draws are in the 500s.",
+        "Cutoffs have been near 470 lately.",
+    ]:
+        d = never_assert_unsourced_draw(claim)
+        assert d.allowed is False and d.gate == "never_assert_unsourced_draw", claim
+    # Cited draw statements pass (the tool's source is repeated).
+    for cited in [
+        "The most recent draw (round #341, source: canada.ca) had a cutoff of 468.",
+        "Per the IRCC feed at https://www.canada.ca/... the latest CEC cutoff was 521.",
+    ]:
+        assert never_assert_unsourced_draw(cited).allowed is True, cited
+    # Non-draw statements, including the candidate's own computed score, are not flagged.
+    for ok in ["Your CRS is 483.", "You have a master's degree.", "French NCLC 7 is met."]:
+        assert never_assert_unsourced_draw(ok).allowed is True, ok
+
+
+def test_screen_response_runs_both_text_gates():
     assert screen_response("You are eligible.").gate == "never_assert_eligibility"
+    assert screen_response("Recent draws are around 480.").gate == "never_assert_unsourced_draw"
     assert screen_response("Your CRS is 470.").allowed is True
+    # A cited draw statement clears both gates.
+    assert screen_response(
+        "The latest draw (round #341) cutoff was 468, source: canada.ca.").allowed is True
 
 
 # --- 3. Loop: mocked-model smoke test of the real Strands orchestration ---------------
