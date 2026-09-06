@@ -190,6 +190,24 @@ def test_from_env_reads_agentcore_memory_config():
     assert cfg.is_offline is False  # agentcore reaches AWS
 
 
+def test_memory_id_falls_back_to_the_toolkit_injected_var():
+    # The AgentCore starter toolkit injects BEDROCK_AGENTCORE_MEMORY_ID when a memory is attached.
+    # The agent reads MAPLEGUARD_MEMORY_ID, so we map the toolkit var onto ours: a hosted deploy
+    # then only needs MAPLEGUARD_SESSION_BACKEND=agentcore, not a re-typed id.
+    from agent import Deployment
+    cfg = Deployment.from_env(env={
+        "MAPLEGUARD_SESSION_BACKEND": "agentcore",
+        "BEDROCK_AGENTCORE_MEMORY_ID": "mapleguard_mem-4Uw9969KMl",
+    })
+    assert cfg.memory_id == "mapleguard_mem-4Uw9969KMl"
+    # An explicit MAPLEGUARD_MEMORY_ID still wins over the toolkit var.
+    cfg2 = Deployment.from_env(env={
+        "MAPLEGUARD_MEMORY_ID": "explicit-id",
+        "BEDROCK_AGENTCORE_MEMORY_ID": "toolkit-id",
+    })
+    assert cfg2.memory_id == "explicit-id"
+
+
 def test_agentcore_memory_config_builds_with_real_sdk():
     # Import-verified path. The config object is pure (pydantic), so it builds with no AWS;
     # the session manager itself validates memoryId against the real Bedrock client on init

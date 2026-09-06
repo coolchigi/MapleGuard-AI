@@ -14,7 +14,10 @@ Env vars (all optional; absence = offline dev):
   MAPLEGUARD_SESSION_DIR      dir for file sessions
   MAPLEGUARD_SESSION_BUCKET   S3 bucket (required if s3)
   MAPLEGUARD_SESSION_PREFIX   S3 key prefix
-  MAPLEGUARD_MEMORY_ID        AgentCore Memory id (required if session_backend=agentcore)
+  MAPLEGUARD_MEMORY_ID        AgentCore Memory id (required if session_backend=agentcore).
+                              Falls back to BEDROCK_AGENTCORE_MEMORY_ID, which the AgentCore
+                              starter toolkit injects automatically when a memory is attached,
+                              so a hosted deploy only needs MAPLEGUARD_SESSION_BACKEND=agentcore.
   MAPLEGUARD_MEMORY_REGION    AWS region for AgentCore Memory
   MAPLEGUARD_ACTOR_ID         per-user actor id for the longitudinal profile (default from
                               session_id)
@@ -118,7 +121,11 @@ class Deployment:
             session_dir=e.get("MAPLEGUARD_SESSION_DIR"),
             s3_bucket=e.get("MAPLEGUARD_SESSION_BUCKET"),
             s3_prefix=e.get("MAPLEGUARD_SESSION_PREFIX", ""),
-            memory_id=e.get("MAPLEGUARD_MEMORY_ID"),
+            # The AgentCore starter toolkit injects BEDROCK_AGENTCORE_MEMORY_ID into the runtime
+            # env whenever a memory is attached, but the agent reads MAPLEGUARD_MEMORY_ID. Map the
+            # toolkit's var onto ours so the attached STM+LTM memory reaches the agent with only
+            # MAPLEGUARD_SESSION_BACKEND=agentcore set at deploy (no need to re-type the id).
+            memory_id=e.get("MAPLEGUARD_MEMORY_ID") or e.get("BEDROCK_AGENTCORE_MEMORY_ID"),
             memory_region=e.get("MAPLEGUARD_MEMORY_REGION"),
             actor_id=e.get("MAPLEGUARD_ACTOR_ID"),
             # profiles default to DynamoDB when a table is named (the deploy path the monitor

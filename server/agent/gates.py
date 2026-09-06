@@ -111,3 +111,47 @@ def never_assert_eligibility(text: str) -> GateDecision:
                     "MapleGuard reports cited facts and refuses eligibility conclusions"),
         )
     return GateDecision(True, "never_assert_eligibility", "no eligibility verdict asserted")
+
+
+# ------------------------------------------------------ never-assert-unsourced-draw
+# Coarse, deterministic backstop over model text, the same posture as never-assert: the prompt
+# is the primary control and the get_recent_draws tool is what makes a cited answer possible.
+# This catches the specific hallucination we saw live -- the agent stating Express Entry draw
+# cutoffs or draw trends ("recent draws in the mid-400s to low 500s") from model memory instead
+# of the cited feed. It fires only when the text pairs DRAW CONTEXT with a CRS-plausible number
+# or a "400s"-style range AND carries no citation marker. A properly behaving agent repeats the
+# tool's source (canada.ca / the round page), so a genuinely cited draw statement passes.
+#
+# Deliberately scoped to DRAW claims, not the candidate's own computed values: "your CRS is 483"
+# has no draw-context word, so it is not flagged. The cost of a false positive is a blocked (and
+# clearly explained) answer, never a silently wrong one -- the right trade for immigration stakes.
+_DRAW_CONTEXT = re.compile(
+    r"\b(?:draws?|cut[- ]?offs?|rounds?|invitations?|itas?)\b", re.IGNORECASE)
+# A CRS-plausible score (300-699) or a decade range like "400s", "mid-400s", "low 500s".
+_DRAW_NUMBER = re.compile(
+    r"\b[3-6]\d{2}\b"
+    r"|\b(?:mid|low|high|upper|lower|around|near|about|roughly)[-\s]?\d{3}s?\b"
+    r"|\b\d00s\b",
+    re.IGNORECASE)
+# Any marker that the statement is sourced. get_recent_draws returns canada.ca URLs and per-round
+# pages, so a cited answer contains one of these. Kept permissive to avoid blocking real citations.
+_CITATION_MARKER = re.compile(
+    r"canada\.ca|https?://|\bsource\b|\bcited\b|\bround\s+#?\d|as of \d{4}-\d{2}-\d{2}",
+    re.IGNORECASE)
+
+
+def never_assert_unsourced_draw(text: str) -> GateDecision:
+    """Gate model text that states an Express Entry draw cutoff or draw trend without a citation.
+
+    Fires only when the text has draw-context words AND a CRS-plausible number or a decade range
+    AND no citation marker. The fix for a block is to call get_recent_draws and repeat its source,
+    not to soften the number."""
+    t = text or ""
+    if _DRAW_CONTEXT.search(t) and _DRAW_NUMBER.search(t) and not _CITATION_MARKER.search(t):
+        return GateDecision(
+            allowed=False,
+            gate="never_assert_unsourced_draw",
+            reason=("text states a draw cutoff or draw trend with no citation; MapleGuard cites "
+                    "every draw from the get_recent_draws feed and never states one from memory"),
+        )
+    return GateDecision(True, "never_assert_unsourced_draw", "no uncited draw claim")

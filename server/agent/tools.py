@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - exercised only when Strands is not ins
 
 from crs import crs
 from crs.timeline import deadlines as _deadlines, trajectory as _trajectory
-from ingest import parse_rounds_json, to_draws
+from ingest import ROUNDS_JSON_URL, fetch_rounds_json, parse_rounds_json, sort_records, to_draws
 from noc import LetterCorrector, LLMDutyMatcher, audit_letter, get_occupation
 from pnp import sirs_bc as _sirs_bc
 
@@ -52,6 +52,12 @@ class ToolDeps:
     corrector: Any = None     # noc.draft.LetterCorrector — drafts the corrected letter
     corpus: Any = None        # memory store for citation retrieval; None = seed citations
     classifier: Any = None    # ingest.PolicyChangeClassifier — extracts an IRCC policy change
+    draws_fetcher: Any = None  # callable() -> raw rounds JSON text; None = live fetch_rounds_json
+
+    def get_draws_fetcher(self):
+        """The rounds-feed fetcher get_recent_draws calls. Defaults to the live network fetch;
+        tests inject a fake that returns fixture JSON so the tool runs offline."""
+        return self.draws_fetcher or fetch_rounds_json
 
     def get_matcher(self):
         if self.matcher is None:
@@ -77,11 +83,12 @@ _DEPS = ToolDeps()
 
 
 def configure_deps(matcher: Any = None, corrector: Any = None, corpus: Any = None,
-                   classifier: Any = None) -> ToolDeps:
+                   classifier: Any = None, draws_fetcher: Any = None) -> ToolDeps:
     """Point the model-backed tools at specific clients and the citation corpus (orchestrator
     wiring / tests)."""
     global _DEPS
-    _DEPS = ToolDeps(matcher=matcher, corrector=corrector, corpus=corpus, classifier=classifier)
+    _DEPS = ToolDeps(matcher=matcher, corrector=corrector, corpus=corpus, classifier=classifier,
+                     draws_fetcher=draws_fetcher)
     return _DEPS
 
 
@@ -227,6 +234,47 @@ def ingest_draws(rounds_json: str, source_url: Optional[str] = None) -> dict:
     return {"draws": draws, "needs_manual_check": flagged}
 
 
+@tool
+def get_recent_draws(limit: int = 6, kind: Optional[str] = None) -> dict:
+    """Look up the most recent Express Entry rounds of invitations from the official IRCC feed,
+    as cited draw records. This is the ONLY sanctioned source for draw cutoffs and recent-draw
+    trends: the model must never state a draw number from its own knowledge. Fetches the live
+    feed and parses it deterministically (the same source and parser behind the /draws API and
+    the dashboard), so every cutoff carries its round number, date, and canada.ca citation.
+
+    Args:
+        limit: How many of the most recent usable draws to return (newest first, default 6).
+        kind: Optional filter, 'general' or 'category', to restrict to that bucket.
+
+    Returns:
+        A dict with source_url, fetched (ISO date), draws[] (each newest-first with round_number,
+        date, kind, name, category, cutoff, invitations, and provenance carrying the per-round
+        canada.ca page), and needs_manual_check[] (rounds refused because a field would not
+        parse). On a fetch failure returns {"error": <message>, "draws": []} so the agent reports
+        it could not look up draws rather than guessing.
+    """
+    try:
+        raw = _DEPS.get_draws_fetcher()()
+    except Exception as exc:  # network/HTTP failure — report, never fall back to a guess
+        return {"error": f"could not fetch the IRCC draws feed: {exc}", "draws": [],
+                "source_url": ROUNDS_JSON_URL}
+    records = parse_rounds_json(raw, source_url=ROUNDS_JSON_URL)
+    to_draws(records)  # revalidate: raises if a usable record would build an uncited Draw
+    usable = [r for r in sort_records(records, newest_first=True)
+              if not r.needs_manual_check and r.cutoff is not None
+              and (kind is None or r.kind == kind)]
+    draws = [{
+        "round_number": r.round_number, "date": r.date.isoformat(),
+        "kind": r.kind, "name": r.name, "category": r.category,
+        "cutoff": r.cutoff, "invitations": r.invitations,
+        "source": r.citation.source_url, "provenance": r.citation.as_dict(),
+    } for r in usable[:max(0, limit)]]
+    flagged = [r.as_dict() for r in records if r.needs_manual_check]
+    return {"source_url": ROUNDS_JSON_URL,
+            "fetched": (records[0].citation.fetched.isoformat() if records else None),
+            "draws": draws, "needs_manual_check": flagged}
+
+
 # --------------------------------------------------------------- model-backed tools
 @tool
 def audit_reference_letter(letter_text: str, noc_code: str) -> dict:
@@ -316,6 +364,7 @@ POSITION_TOOLS = [
     crs_deadlines,
     sirs_bc,
     reachable_paths,
+    get_recent_draws,
     ingest_draws,
 ]
 NOC_TOOLS = [

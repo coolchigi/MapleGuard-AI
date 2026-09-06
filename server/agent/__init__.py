@@ -15,7 +15,8 @@ Public surface:
 """
 from .citations import cite_gaps_from_corpus, retrieve_citation
 from .config import Deployment, build_memory, build_session_manager
-from .gates import GateDecision, forbidden_tools, never_assert_eligibility, never_submit
+from .gates import (GateDecision, forbidden_tools, never_assert_eligibility,
+                    never_assert_unsourced_draw, never_submit)
 from .memory import (build_agentcore_session_manager, build_kb_memory, build_test_memory,
                      noc_seed_passages)
 from .observability import (DEFAULT_TRACE_ATTRIBUTES, agent_loop_trace, enable_tracing,
@@ -73,6 +74,7 @@ __all__ = [
     "ToolDeps",
     "never_submit",
     "never_assert_eligibility",
+    "never_assert_unsourced_draw",
     "forbidden_tools",
     "GateDecision",
     "tick",
