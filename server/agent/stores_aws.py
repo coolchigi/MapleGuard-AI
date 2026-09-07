@@ -105,6 +105,46 @@ class DynamoDBProfileStore:
                              bc_offer=item.get("bc_offer"))
 
 
+class DynamoDBAlertLedger:
+    """The per-user notification store + dedup memory, in DynamoDB (the deploy side of
+    monitor.AlertLedger). The monitor Lambda writes it and the API's /alerts feed reads it.
+
+    Table schema: partition key `profile_id` (S), sort key `event_id` (S), attribute `data` = JSON
+    of the alert (Alert.to_dict). `record` is read-then-write (the monitor tick is single-threaded,
+    so a full conditional-write is unnecessary): it returns False when the event already exists for
+    that profile, so a caller never re-sends. `list_for` queries one profile's items. Inject `table`
+    to test offline.
+    """
+    def __init__(self, table_name: str = "", region: Optional[str] = None,
+                 table: Any = None, pk_name: str = "profile_id", sk_name: str = "event_id"):
+        self._table = _dynamo_table(table_name, region, table)
+        self._pk = pk_name
+        self._sk = sk_name
+
+    def record(self, profile_id: str, event_id: str, alert: dict) -> bool:
+        key = {self._pk: profile_id, self._sk: event_id}
+        resp = self._table.get_item(Key=key)
+        if (resp.get("Item") if isinstance(resp, dict) else None):
+            return False  # this event already reached this profile
+        self._table.put_item(Item={**key, "data": json.dumps(alert),
+                                   "as_of": alert.get("as_of", "")})
+        return True
+
+    def list_for(self, profile_id: str) -> list[dict]:
+        from boto3.dynamodb.conditions import Key
+        alerts: list[dict] = []
+        kwargs: dict[str, Any] = {"KeyConditionExpression": Key(self._pk).eq(profile_id)}
+        while True:
+            resp = self._table.query(**kwargs)
+            for item in resp.get("Items", []):
+                alerts.append(json.loads(item["data"]) if "data" in item else item)
+            token = resp.get("LastEvaluatedKey")
+            if not token:
+                break
+            kwargs["ExclusiveStartKey"] = token
+        return sorted(alerts, key=lambda a: a.get("as_of", ""), reverse=True)
+
+
 class SnsAlertSink:
     """Publishes each alert to an SNS topic (user-facing status alerting). Logs on failure and
     keeps going — a monitoring tick must not die because one publish failed. Inject `client` to

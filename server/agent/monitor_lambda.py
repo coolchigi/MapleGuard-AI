@@ -37,7 +37,7 @@ def build_monitor_deps(env: Optional[dict] = None, *,
                        profiles: Any = None, snapshots: Any = None, sink: Any = None,
                        narrator: Any = None, fetch_policy_update: Optional[Callable[[], str]] = None,
                        classify_update: Optional[Callable[[str], Any]] = None,
-                       matcher: Any = None) -> MonitorDeps:
+                       matcher: Any = None, ledger: Any = None) -> MonitorDeps:
     """Assemble MonitorDeps for the scheduled run. Any component can be injected (tests do); the
     rest default to the live/AWS wiring:
 
@@ -81,6 +81,13 @@ def build_monitor_deps(env: Optional[dict] = None, *,
             logger.info("no MAPLEGUARD_ALERT_TOPIC_ARN set; alerts are logged, not sent")
             sink = CollectingAlertSink()
 
+    if ledger is None:
+        # The per-user notification store + dedup memory. DynamoDB when MAPLEGUARD_ALERTS_TABLE is
+        # set (shared with the API's /alerts feed), else a file ledger. Without it the deadline
+        # trigger would re-send every tick, so the deploy wiring sets the table.
+        from .config import build_alert_ledger
+        ledger = build_alert_ledger(e)
+
     # Opt-in policy-change watch (the OTHER trigger: a NOC/CRS-weight/... rule change).
     policy_url = e.get("MAPLEGUARD_POLICY_URL")
     if policy_url and (fetch_policy_update is None or classify_update is None or matcher is None):
@@ -97,7 +104,7 @@ def build_monitor_deps(env: Optional[dict] = None, *,
             matcher = built_matcher
 
     return MonitorDeps(fetch_rounds=fetch_rounds, profiles=profiles, snapshots=snapshots,
-                       sink=sink, source_url=source_url, narrator=narrator,
+                       sink=sink, source_url=source_url, narrator=narrator, ledger=ledger,
                        fetch_policy_update=fetch_policy_update, classify_update=classify_update,
                        policy_source_url=policy_url, matcher=matcher)
 

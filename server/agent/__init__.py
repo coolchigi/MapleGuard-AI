@@ -14,7 +14,7 @@ Public surface:
   never_submit, never_assert_eligibility, GateDecision   the policy gates
 """
 from .citations import cite_gaps_from_corpus, retrieve_citation
-from .config import Deployment, build_memory, build_session_manager
+from .config import Deployment, build_alert_ledger, build_memory, build_session_manager
 from .gates import (GateDecision, forbidden_tools, never_assert_eligibility,
                     never_assert_unsourced_draw, never_submit)
 from .memory import (build_agentcore_session_manager, build_kb_memory, build_test_memory,
@@ -25,10 +25,11 @@ from .monitor_lambda import build_monitor_deps, lambda_handler
 from .sandbox import (AgentCoreCodeSandbox, LocalSubprocessSandbox, ReproducibleScore,
                       SandboxResult, build_agentcore_sandbox, crs_sandbox_snippet,
                       run_crs_in_sandbox)
-from .stores_aws import DynamoDBProfileStore, DynamoDBSnapshotStore, SnsAlertSink
-from .monitor import (Alert, CollectingAlertSink, FileSnapshotStore, InMemoryProfileStore,
-                      InMemorySnapshotStore, MonitorDeps, Snapshot, StoredProfile, TickResult,
-                      scheduled_handler, tick)
+from .stores_aws import (DynamoDBAlertLedger, DynamoDBProfileStore, DynamoDBSnapshotStore,
+                         SnsAlertSink)
+from .monitor import (Alert, AlertLedger, CollectingAlertSink, FileAlertLedger, FileSnapshotStore,
+                      InMemoryAlertLedger, InMemoryProfileStore, InMemorySnapshotStore, MonitorDeps,
+                      Snapshot, StoredProfile, TickResult, scheduled_handler, tick)
 from .orchestrator import (SYSTEM_PROMPT, build_dev_orchestrator, build_orchestrator,
                            make_policy_gate, screen_response, tool_name)
 from .runtime import build_app, handle
@@ -87,10 +88,15 @@ __all__ = [
     "InMemorySnapshotStore",
     "FileSnapshotStore",
     "InMemoryProfileStore",
+    "AlertLedger",
+    "InMemoryAlertLedger",
+    "FileAlertLedger",
     "CollectingAlertSink",
     "DynamoDBSnapshotStore",
     "DynamoDBProfileStore",
+    "DynamoDBAlertLedger",
     "SnsAlertSink",
+    "build_alert_ledger",
     "build_monitor_deps",
     "lambda_handler",
 ]

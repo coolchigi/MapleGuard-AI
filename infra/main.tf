@@ -48,6 +48,24 @@ resource "aws_dynamodb_table" "snapshot" {
   }
 }
 
+# Per-user notification ledger: the monitor writes cited alerts here (deduped by event_id) and the
+# API's GET /profiles/{id}/alerts feed reads them. Partition per user, so it scales with users.
+resource "aws_dynamodb_table" "notifications" {
+  name         = "${local.name}-notifications"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "profile_id"
+  range_key    = "event_id"
+
+  attribute {
+    name = "profile_id"
+    type = "S"
+  }
+  attribute {
+    name = "event_id"
+    type = "S"
+  }
+}
+
 # ------------------------------------------------------------------------- alerts (SNS)
 resource "aws_sns_topic" "alerts" {
   count = var.alerts_enabled ? 1 : 0
@@ -95,10 +113,11 @@ resource "aws_iam_role_policy" "monitor" {
     Statement = concat([
       {
         Effect = "Allow"
-        Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Scan"]
+        Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Scan", "dynamodb:Query"]
         Resource = [
           aws_dynamodb_table.profiles.arn,
           aws_dynamodb_table.snapshot.arn,
+          aws_dynamodb_table.notifications.arn,
         ]
       }
       ], var.alerts_enabled ? [{
@@ -123,6 +142,7 @@ resource "aws_lambda_function" "monitor" {
     variables = merge({
       MAPLEGUARD_PROFILES_TABLE = aws_dynamodb_table.profiles.name
       MAPLEGUARD_SNAPSHOT_TABLE = aws_dynamodb_table.snapshot.name
+      MAPLEGUARD_ALERTS_TABLE   = aws_dynamodb_table.notifications.name
       },
       var.alerts_enabled ? { MAPLEGUARD_ALERT_TOPIC_ARN = aws_sns_topic.alerts[0].arn } : {},
       var.rounds_url != "" ? { MAPLEGUARD_ROUNDS_URL = var.rounds_url } : {},

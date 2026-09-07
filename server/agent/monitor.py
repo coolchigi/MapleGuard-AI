@@ -106,6 +106,10 @@ class Alert:
     deadlines: Optional[dict]
     citations: list[str]
     summary: str = ""
+    # `kind` labels the notification for the user's feed; `event_id` is its STABLE identity, so the
+    # per-profile ledger records each distinct event once and never re-sends it (see AlertLedger).
+    kind: str = "draw"                   # "draw" | "deadline" | "policy"
+    event_id: str = ""
     # Policy-change fields, set only on a policy-change alert (a NOC/CRS-weight/... rule change),
     # None on a draw alert. `policy_change` is the validated change; `crs` is the deterministic
     # position with the before/after delta; `letter_gaps` are the re-audit gaps cited to the
@@ -116,7 +120,8 @@ class Alert:
 
     def to_dict(self) -> dict:
         out = {
-            "profile_id": self.profile_id, "as_of": self.as_of, "new_draws": self.new_draws,
+            "profile_id": self.profile_id, "as_of": self.as_of, "kind": self.kind,
+            "event_id": self.event_id, "new_draws": self.new_draws,
             "impact": self.impact, "reachable_alternatives": self.reachable_alternatives,
             "deadlines": self.deadlines, "citations": self.citations, "summary": self.summary,
         }
@@ -158,6 +163,18 @@ class WritableProfileStore(ProfileStore, Protocol):
 
 class AlertSink(Protocol):
     def emit(self, alert: Alert) -> None: ...
+
+
+class AlertLedger(Protocol):
+    """The per-user notification store and the dedup memory in one.
+
+    `record` writes an alert under (profile_id, event_id) and returns True only when that event is
+    NEW for that profile, so a caller emits a notification once and never again on later ticks (the
+    deadline trigger runs every tick, so this is what stops it re-sending). `list_for` is the
+    dashboard's notification feed for one profile, newest first. Per-user by construction, so it
+    scales with users (unlike stuffing alert history into the single global snapshot item)."""
+    def record(self, profile_id: str, event_id: str, alert: dict) -> bool: ...
+    def list_for(self, profile_id: str) -> list[dict]: ...
 
 
 # ----------------------------------------------------------------- dev implementations
@@ -252,6 +269,60 @@ class FileProfileStore:
             return StoredProfile.from_dict(json.load(f))
 
 
+class InMemoryAlertLedger:
+    """Per-user notification store + dedup, in memory. Dev/test default (DynamoDB in deploy)."""
+    def __init__(self):
+        self._by_profile: dict[str, list[dict]] = {}
+        self._seen: dict[str, set[str]] = {}
+
+    def record(self, profile_id: str, event_id: str, alert: dict) -> bool:
+        seen = self._seen.setdefault(profile_id, set())
+        if event_id in seen:
+            return False
+        seen.add(event_id)
+        self._by_profile.setdefault(profile_id, []).append(alert)
+        return True
+
+    def list_for(self, profile_id: str) -> list[dict]:
+        # Newest first: alerts carry `as_of`; ties keep insertion order.
+        return sorted(self._by_profile.get(profile_id, []),
+                      key=lambda a: a.get("as_of", ""), reverse=True)
+
+
+class FileAlertLedger:
+    """Per-user notification store backed by one JSON file per profile. Dev/demo persistence, no
+    AWS, same dedup contract as the DynamoDB ledger so the deploy swap is config only."""
+    def __init__(self, directory: str):
+        self._dir = directory
+
+    def _path(self, profile_id: str) -> str:
+        import os
+        safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in profile_id) or "_"
+        return os.path.join(self._dir, f"{safe}.json")
+
+    def _load(self, profile_id: str) -> list[dict]:
+        import os
+        path = self._path(profile_id)
+        if not os.path.exists(path):
+            return []
+        with open(path) as f:
+            return json.load(f)
+
+    def record(self, profile_id: str, event_id: str, alert: dict) -> bool:
+        import os
+        existing = self._load(profile_id)
+        if any(a.get("event_id") == event_id for a in existing):
+            return False
+        existing.append(alert)
+        os.makedirs(self._dir, exist_ok=True)
+        with open(self._path(profile_id), "w") as f:
+            json.dump(existing, f)
+        return True
+
+    def list_for(self, profile_id: str) -> list[dict]:
+        return sorted(self._load(profile_id), key=lambda a: a.get("as_of", ""), reverse=True)
+
+
 class CollectingAlertSink:
     """Produces and LOGS each alert, and keeps them for inspection. It does NOT send. Sending is
     the gated action (compute-and-refuse on the button); wiring an actual send is a deliberate,
@@ -261,8 +332,8 @@ class CollectingAlertSink:
 
     def emit(self, alert: Alert) -> None:
         self.alerts.append(alert)
-        logger.info("ALERT profile=%s new_draws=%d citations=%s", alert.profile_id,
-                    len(alert.new_draws), alert.citations)
+        logger.info("ALERT profile=%s kind=%s event=%s citations=%s", alert.profile_id,
+                    alert.kind, alert.event_id, alert.citations)
 
 
 # --------------------------------------------------------------------- deps + the loop
@@ -279,6 +350,11 @@ class MonitorDeps:
     source_url: Optional[str] = None
     narrator: Any = None
     horizon_within_reach: bool = True   # also alert when a new draw is one move away
+    # The per-user notification store + dedup memory. When set, every alert is recorded once per
+    # (profile, event_id) and only a NEWLY recorded alert is emitted, so the deadline trigger (which
+    # runs every tick) never re-sends. When None, dedup falls back to the draw-snapshot only.
+    ledger: Optional[Any] = None
+    deadline_horizon_days: int = 60     # alert on a dated cliff this many days out (test expiry, age)
     # Policy-change watch (optional; the loop only runs it when BOTH are wired):
     #   fetch_policy_update -> the raw IRCC update text (the only new I/O; inject a fixture in tests)
     #   classify_update     -> classify+validate that text -> a validated PolicyChange dict or None
@@ -334,40 +410,79 @@ def _self_actionable(path: dict) -> bool:
 
 def _profile_alert(sp: StoredProfile, current_draws: list[dict], new_round_numbers: set[str],
                    as_of: Optional[str], want_within_reach: bool) -> Optional[Alert]:
-    """Deterministic decision for one profile: does a NEW draw land in its reachable set (or a
-    self-actionable near-miss)? If so, build the cited alert. Pure over the tool outputs."""
+    """Deterministic decision for one profile: which NEW draws are RELEVANT to this candidate?
+
+    Relevance is nuanced so it is useful without being noise:
+      - General draws (everyone is in the pool): score-based, reachable now or a self-actionable
+        near-miss, the same bar as before.
+      - Category / BC PNP draws: ELIGIBILITY-based. A new draw in a category the candidate is in
+        (or a PNP they can register for) is surfaced even when they cannot clear it yet, because
+        their category's bar moving is exactly the signal they asked for. Ineligible or
+        eligibility-unknown draws are not surfaced (silence is a feature).
+    Builds one cited alert over the relevant new draws. Pure over the tool outputs."""
     reach = reachable_paths(sp.profile, current_draws, as_of=as_of, bc_offer=sp.bc_offer)
     all_options = list(reach["reachable"]) + list(reach["within_reach"])
-    trigger_set = list(reach["reachable"])
-    if want_within_reach:
-        trigger_set += [p for p in reach["within_reach"] if _self_actionable(p)]
 
-    impacted = [p for p in trigger_set
-                if (p["draw"].get("provenance") or {}).get("round_number") in new_round_numbers
-                or p["draw"]["name"] in new_round_numbers]
-    if not impacted:
+    impacted: list[dict] = []
+    # General draws: score-based relevance (reachable, or a self-actionable near-miss).
+    impacted += [p for p in reach["reachable"] if p["draw"].get("kind") == "general"]
+    if want_within_reach:
+        impacted += [p for p in reach["within_reach"]
+                     if p["draw"].get("kind") == "general" and _self_actionable(p)]
+    # Category / PNP draws: eligibility-based relevance (in-category / registrable), reach or not.
+    for bucket in ("reachable", "within_reach", "blocked"):
+        impacted += [p for p in reach[bucket]
+                     if p["draw"].get("kind") != "general" and p.get("eligible") is True]
+
+    # Keep only genuinely NEW draws, deduped by round number.
+    def _round(p) -> str:
+        return str((p["draw"].get("provenance") or {}).get("round_number") or p["draw"]["name"])
+
+    relevant: list[dict] = []
+    seen_rounds: set = set()
+    for p in impacted:
+        rn = _round(p)
+        is_new = ((p["draw"].get("provenance") or {}).get("round_number") in new_round_numbers
+                  or p["draw"]["name"] in new_round_numbers)
+        if not is_new or rn in seen_rounds:
+            continue
+        seen_rounds.add(rn)
+        relevant.append(p)
+    if not relevant:
         return None
 
     # Deadlines are cited context (deterministic computation); only available with a birthdate.
-    deadlines = None
-    if sp.profile.get("date_of_birth"):
-        deadlines = crs_deadlines(sp.profile, as_of=as_of)
+    deadlines = crs_deadlines(sp.profile, as_of=as_of) if sp.profile.get("date_of_birth") else None
 
     # Ranked citations: primary government source (the draw's provenance URL) first.
     citations: list[str] = []
-    for p in impacted:
+    for p in relevant:
         prov = p["draw"].get("provenance") or {}
         src = prov.get("source_url") or p["draw"].get("source")
         if src and src not in citations:
             citations.append(src)
 
+    from ingest.categories import resolve_category
+
+    def _impact(p: dict) -> dict:
+        d = p["draw"]
+        # The CANONICAL pathway slug (the eligibility engine's vocabulary), so the feed and the
+        # relevance filter speak the same language. Falls back to the draw's own category/kind.
+        pathway = resolve_category(d.get("category") or d.get("name")) or d.get("category") or d.get("kind")
+        return {"draw": d["name"],
+                "round_number": (d.get("provenance") or {}).get("round_number"),
+                "category": pathway, "eligible": p.get("eligible"),
+                "eligibility_reason": p.get("eligibility_reason"),
+                "your_score": p["your_score"], "cutoff": p["cutoff"], "clears": p["clears"],
+                "gap": p["gap"], "closing_moves": p.get("closing_moves", [])}
+
     return Alert(
         profile_id=sp.id,
         as_of=as_of or date.today().isoformat(),
-        new_draws=[p["draw"] for p in impacted],
-        impact=[{"draw": p["draw"]["name"], "round_number": (p["draw"].get("provenance") or {}).get("round_number"),
-                 "your_score": p["your_score"], "cutoff": p["cutoff"], "clears": p["clears"],
-                 "gap": p["gap"], "closing_moves": p.get("closing_moves", [])} for p in impacted],
+        kind="draw",
+        event_id="draw:" + "+".join(sorted(_round(p) for p in relevant)),
+        new_draws=[p["draw"] for p in relevant],
+        impact=[_impact(p) for p in relevant],
         reachable_alternatives=all_options,
         deadlines=deadlines,
         citations=citations,
@@ -423,11 +538,63 @@ def _policy_profile_alert(sp: StoredProfile, change: dict, as_of: str,
 
     return Alert(
         profile_id=sp.id, as_of=as_of,
+        kind="policy",
+        event_id=f"policy:{change.get('change_type')}:{noc_code}:{change.get('effective_date') or ''}",
         new_draws=[], impact=[], reachable_alternatives=[],
         deadlines=(crs_deadlines(sp.profile, as_of=as_of) if sp.profile.get("date_of_birth") else None),
         citations=citations,
         policy_change=change, crs=crs, letter_gaps=gaps,
     )
+
+
+def _deadline_alerts(sp: StoredProfile, as_of: str, horizon_days: int) -> list[Alert]:
+    """Time-based alerts, independent of any draw: the dated cliffs from `crs.deadlines` that fall
+    within `horizon_days` of `as_of`. The language-test expiry (in-pool language points drop to
+    zero) and the NEXT age-bracket cliff (age points drop on a birthday) are the two modeled today.
+    Each is a distinct, cited event, and its stable event_id lets the per-user ledger send it once.
+
+    Needs a date_of_birth (age cliffs) or a test date (expiry); returns [] when neither is near.
+    """
+    if not sp.profile.get("date_of_birth"):
+        return []
+    from datetime import date as _date, timedelta
+    today = _date.fromisoformat(as_of) if as_of else _date.today()
+    horizon = today + timedelta(days=horizon_days)
+    dl = crs_deadlines(sp.profile, as_of=as_of)
+
+    cliffs: list[dict] = []
+    if dl.get("test_expiry_cliff"):
+        cliffs.append(dl["test_expiry_cliff"])
+    # Only the NEXT age cliff matters for a near-term alert (the rest are years out).
+    upcoming_age = [c for c in dl.get("age_cliffs", []) if c.get("date")]
+    if upcoming_age:
+        cliffs.append(min(upcoming_age, key=lambda c: c["date"]))
+
+    alerts: list[Alert] = []
+    for c in cliffs:
+        cdate = c.get("date")
+        if not cdate:
+            continue
+        try:
+            when = _date.fromisoformat(cdate)
+        except (ValueError, TypeError):
+            continue
+        if not (today <= when <= horizon):
+            continue  # outside the horizon; silence until it approaches
+        days = (when - today).days
+        alerts.append(Alert(
+            profile_id=sp.id, as_of=as_of,
+            kind="deadline",
+            event_id=f"deadline:{c.get('kind')}:{cdate}",
+            new_draws=[], impact=[{
+                "deadline_kind": c.get("kind"), "date": cdate, "label": c.get("label"),
+                "days_away": days, "crs_delta": c.get("delta"),
+            }],
+            reachable_alternatives=[],
+            deadlines=dl,
+            citations=[],  # deterministic computation from the candidate's own dated inputs
+        ))
+    return alerts
 
 
 def tick(deps: MonitorDeps, as_of: Optional[str] = None) -> TickResult:
@@ -447,34 +614,45 @@ def tick(deps: MonitorDeps, as_of: Optional[str] = None) -> TickResult:
     new_records = _new_records(records, snapshot)
 
     alerts: list[Alert] = []
+
+    def _emit(alert: Optional[Alert]) -> None:
+        """Narrate (if a narrator is wired), dedup through the per-user ledger, then send. A ledger
+        that reports the event already recorded for this profile means we do NOT re-send it, which is
+        what keeps the every-tick deadline trigger from repeating."""
+        if alert is None:
+            return
+        if deps.narrator is not None:
+            alert = replace(alert, summary=_narrate(deps.narrator, alert))
+        if deps.ledger is not None and not deps.ledger.record(
+                alert.profile_id, alert.event_id, alert.to_dict()):
+            return
+        deps.sink.emit(alert)
+        alerts.append(alert)
+
+    profiles = deps.profiles.list_profiles()
+
+    # 1. Draw alerts: only when the feed produced genuinely new draws.
     if new_records:
         current = ingest_draws(raw, source_url=deps.source_url)["draws"]
         new_round_numbers = {r.round_number for r in new_records} | {r.name for r in new_records}
-        for sp in deps.profiles.list_profiles():
-            alert = _profile_alert(sp, current, new_round_numbers, ran_at,
-                                   deps.horizon_within_reach)
-            if alert is None:
-                continue
-            if deps.narrator is not None:
-                alert = replace(alert, summary=_narrate(deps.narrator, alert))
-            deps.sink.emit(alert)
-            alerts.append(alert)
+        for sp in profiles:
+            _emit(_profile_alert(sp, current, new_round_numbers, ran_at, deps.horizon_within_reach))
 
-    # Policy-change routing: the OTHER watch. When an update fetcher + classifier are wired, classify
-    # the latest IRCC update (model extracts, validator drops bad output), and for a validated NOC
-    # change re-audit each affected profile's stored letter. Relevance still applies (only profiles
-    # the change actually moves). Independent of the draw delta above.
+    # 2. Deadline alerts: time-based, every tick, independent of draws. The ledger dedup ensures
+    # each dated cliff (test expiry, next age cliff) within the horizon is sent once, not every tick.
+    for sp in profiles:
+        for da in _deadline_alerts(sp, ran_at, deps.deadline_horizon_days):
+            _emit(da)
+
+    # 3. Policy-change routing: the OTHER watch. When an update fetcher + classifier are wired,
+    # classify the latest IRCC update (model extracts, validator drops bad output), and for a
+    # validated NOC change re-audit each affected profile's stored letter. Relevance still applies
+    # (only profiles the change actually moves). Independent of the draw delta above.
     if deps.fetch_policy_update is not None and deps.classify_update is not None:
         change = deps.classify_update(deps.fetch_policy_update())  # validated dict or None (dropped)
         if change and change.get("change_type") == "noc":
-            for sp in deps.profiles.list_profiles():
-                pa = _policy_profile_alert(sp, change, ran_at, deps.matcher)
-                if pa is None:
-                    continue
-                if deps.narrator is not None:
-                    pa = replace(pa, summary=_narrate(deps.narrator, pa))
-                deps.sink.emit(pa)
-                alerts.append(pa)
+            for sp in profiles:
+                _emit(_policy_profile_alert(sp, change, ran_at, deps.matcher))
 
     new_snapshot = _updated_snapshot(records, snapshot)
     deps.snapshots.save(new_snapshot)

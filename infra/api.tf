@@ -57,6 +57,12 @@ resource "aws_iam_role_policy" "api" {
         Resource = [aws_dynamodb_table.profiles.arn]
       },
       {
+        # Read the per-user notification ledger for GET /profiles/{id}/alerts (the monitor writes it).
+        Effect   = "Allow"
+        Action   = ["dynamodb:GetItem", "dynamodb:Query"]
+        Resource = [aws_dynamodb_table.notifications.arn]
+      },
+      {
         # Invoke the pinned Bedrock model for the /audit + /draft NOC steps.
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
@@ -88,6 +94,8 @@ resource "aws_lambda_function" "api" {
     variables = {
       # Share the monitor's profile table so intake and the watch loop are one store.
       MAPLEGUARD_PROFILES_TABLE = aws_dynamodb_table.profiles.name
+      # The per-user notification ledger the monitor writes; GET /profiles/{id}/alerts reads it.
+      MAPLEGUARD_ALERTS_TABLE = aws_dynamodb_table.notifications.name
       # NOC audit/draft on Bedrock with the runtime role's creds (no ANTHROPIC_API_KEY).
       MAPLEGUARD_NOC_BACKEND   = "bedrock"
       MAPLEGUARD_BEDROCK_MODEL = var.bedrock_model_id
