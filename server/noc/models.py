@@ -33,6 +33,11 @@ class NocOccupation:
     source: str
     version: str
     verified: bool = False
+    # Provenance stamped by the ingestion pipeline (noc/ingest.py). Empty on hand-seeded records.
+    teer: Optional[int] = None      # NOC 2021 TEER category (the code's 2nd digit)
+    content_hash: str = ""          # sha256 of the extracted verbatim content (title+lead+duties)
+    fetched: str = ""               # ISO date the source page was fetched
+    verification_note: str = ""     # how verified was decided (source-match, judge veto, ...)
 
     def required_duties(self) -> List[Duty]:
         return [duty for duty in self.main_duties if not duty.optional]

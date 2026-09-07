@@ -8,6 +8,8 @@ against the source.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Dict
 
 from .models import Duty, NocOccupation
@@ -140,12 +142,31 @@ NOC_21230 = NocOccupation(
     verified=False,
 )
 
-OCCUPATIONS: Dict[str, NocOccupation] = {
+# Hand-transcribed seeds (the original bring-up). The ingested corpus below OVERRIDES any of
+# these whose code it covers, because those records earned verified=True by a deterministic
+# source-match (see noc/ingest.py) rather than a human retyping the text.
+_HAND_SEEDED: Dict[str, NocOccupation] = {
     NOC_21234.code: NOC_21234,
     NOC_21231.code: NOC_21231,
     NOC_21232.code: NOC_21232,
     NOC_21230.code: NOC_21230,
 }
+
+_CORPUS_PATH = Path(__file__).with_name("corpus") / "noc_2021.json"
+
+
+def _load_ingested_corpus() -> Dict[str, NocOccupation]:
+    """Load the source-verified NOC records produced by the ingestion pipeline. Absent or
+    unreadable corpus is non-fatal: the hand-seeded records still answer."""
+    if not _CORPUS_PATH.exists():
+        return {}
+    from .ingest import occupation_from_dict
+    data = json.loads(_CORPUS_PATH.read_text(encoding="utf-8"))
+    return {d["code"]: occupation_from_dict(d) for d in data.get("occupations", [])}
+
+
+# The live occupation table: hand seeds first, ingested source-verified records layered on top.
+OCCUPATIONS: Dict[str, NocOccupation] = {**_HAND_SEEDED, **_load_ingested_corpus()}
 
 
 def get_occupation(code: str) -> NocOccupation:

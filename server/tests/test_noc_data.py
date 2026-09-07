@@ -47,11 +47,17 @@ def test_only_may_duties_are_optional():
             assert duty.optional == duty.text.startswith("May ")
 
 
-def test_newly_seeded_nocs_flagged_unverified():
-    # Honest provenance: transcribed-but-not-line-checked occupations are verified=False.
-    assert get_occupation("21234").verified is True   # the original, verified verbatim
-    for code in ["21231", "21232", "21230"]:
-        assert get_occupation(code).verified is False
+def test_ingested_nocs_are_source_verified():
+    # The ingestion pipeline (noc/ingest.py) earns verified=True by a deterministic source-match
+    # against the fetched ESDC page, and stamps the provenance. These codes are covered by the
+    # ingested corpus, so they are now source-verified (they were hand-transcribed before).
+    for code in ["21234", "21231", "21232", "21230", "21233"]:
+        occ = get_occupation(code)
+        assert occ.verified is True
+        assert occ.teer == 1                       # NOC 2021 tech codes are TEER 1
+        assert len(occ.content_hash) == 64         # sha256 hex of the extracted content
+        assert occ.fetched                          # a fetch date is stamped
+        assert "source-match" in occ.verification_note
 
 
 # --- NEEDS_VERIFICATION guard on the audit ------------------------------------------
@@ -63,10 +69,19 @@ def test_audit_of_verified_occupation_is_not_flagged():
 
 
 def test_audit_of_unverified_occupation_is_loudly_flagged():
-    occ = get_occupation("21231")  # seeded verbatim but not yet line-verified
+    # An occupation whose text is NOT source-verified must be flagged loudly. Build one directly
+    # so the check does not depend on which seeded codes happen to be verified.
+    from noc import Duty, NocOccupation
+    occ = NocOccupation(
+        code="99999", title="Unverified test occupation",
+        lead_statement="Placeholder lead statement.",
+        main_duties=[Duty("99999.1", "Do the placeholder work")],
+        source="https://noc.esdc.gc.ca/Structure/NOCProfile?code=99999",
+        version="NOC 2021 Version 1.0", verified=False,
+    )
     report = audit_letter("Some letter text.", occ, _EMPTY_MATCHER)
     assert report.needs_verification is True
-    assert "21231" in report.verification_note and occ.source in report.verification_note
+    assert "99999" in report.verification_note and occ.source in report.verification_note
     data = report.to_dict()
     assert data["needs_verification"] is True
     assert data["verification_note"]  # non-empty reason travels with the serialized report
