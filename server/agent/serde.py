@@ -76,6 +76,11 @@ def profile_from_dict(data: dict) -> Profile:
         kwargs["spouse_first_language"] = language_from_dict(data["spouse_first_language"])
     if data.get("first_language_test_date"):
         kwargs["first_language_test_date"] = _parse_date(data["first_language_test_date"])
+    # The candidate's NOC 2021 code, needed to decide occupation-category eligibility (STEM,
+    # healthcare, trades, ...). A string, kept verbatim; absence leaves those categories as
+    # "cannot decide" rather than guessed.
+    if data.get("noc_code"):
+        kwargs["noc_code"] = str(data["noc_code"]).strip()
 
     for key in _PROFILE_PASSTHROUGH_INTS:
         if key in data and data[key] is not None:

@@ -23,7 +23,8 @@ from agent import (GateDecision, MAPLEGUARD_TOOLS, SYSTEM_PROMPT, configure_deps
                    never_assert_unsourced_draw, never_submit)
 from agent.orchestrator import screen_response, tool_name
 from agent.tools import (audit_reference_letter, compute_crs, crs_deadlines, crs_trajectory,
-                         get_recent_draws, ingest_draws, reachable_paths, sirs_bc)
+                         get_eligible_pathways, get_recent_draws, ingest_draws, reachable_paths,
+                         sirs_bc)
 from crs import Profile, crs
 
 PROFILE = {
@@ -40,8 +41,8 @@ def test_all_tools_registered_and_named():
     names = [tool_name(t) for t in MAPLEGUARD_TOOLS]
     assert names == [
         "compute_crs", "crs_trajectory", "crs_deadlines", "sirs_bc",
-        "reachable_paths", "get_recent_draws", "ingest_draws", "audit_reference_letter",
-        "draft_corrected_letter", "classify_policy_change",
+        "reachable_paths", "get_recent_draws", "get_eligible_pathways", "ingest_draws",
+        "audit_reference_letter", "draft_corrected_letter", "classify_policy_change",
     ]
 
 
@@ -154,6 +155,26 @@ def test_get_recent_draws_reports_fetch_failure_instead_of_guessing():
     finally:
         configure_deps()
     assert out["draws"] == [] and "could not fetch" in out["error"]
+
+
+def test_get_eligible_pathways_tool_surfaces_cited_options_with_injected_feed():
+    # A civil engineer (NOC 21300, on the 2026 STEM list) with French: the tool should report the
+    # pathways they qualify for, enriched by the injected draws feed. No network.
+    configure_deps(draws_fetcher=_fixture_rounds_doc)
+    try:
+        out = get_eligible_pathways({
+            "education": "masters-or-professional",
+            "first_language": {"speaking": 9, "listening": 9, "reading": 9, "writing": 9},
+            "date_of_birth": "1994-07-01", "canadian_work_years": 2, "noc_code": "21300",
+            "second_language": {"speaking": 8, "listening": 8, "reading": 8, "writing": 8},
+            "second_language_is_french": True,
+        }, as_of="2026-09-07")
+    finally:
+        configure_deps()
+    assert isinstance(out["crs_total"], int)
+    assert "french" in out["qualifying"] and "stem" in out["qualifying"]
+    french = next(p for p in out["pathways"] if p["slug"] == "french")
+    assert french["eligible"] is True and "canada.ca" in french["source_url"]
 
 
 def test_audit_tool_returns_cited_report_with_injected_fake_matcher():

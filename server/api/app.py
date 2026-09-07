@@ -31,8 +31,8 @@ from noc import get_occupation
 from .dashboard import dashboard_from_dict
 from .model_config import NocModel, build_noc_model
 from .schemas import (AuditRequest, BriefRequest, DashboardRequest, DeadlinesRequest, DraftRequest,
-                      DrawsResponse, PositionRequest, ProfileSaveRequest, ReachableRequest,
-                      ReferenceLetter, SirsRequest, TrajectoryRequest)
+                      DrawsResponse, PathwaysRequest, PositionRequest, ProfileSaveRequest,
+                      ReachableRequest, ReferenceLetter, SirsRequest, TrajectoryRequest)
 
 
 def create_app(noc_model: Optional[NocModel] = None,
@@ -119,8 +119,9 @@ def create_app(noc_model: Optional[NocModel] = None,
         return {"service": "MapleGuard API",
                 "description": "Deterministic Canadian-immigration position + cited NOC audit.",
                 "endpoints": {"health": "GET /health", "dashboard": "POST /dashboard",
-                              "position": "POST /position", "draws": "GET /draws",
-                              "audit": "POST /audit", "profiles": "GET /profiles"}}
+                              "position": "POST /position", "pathways": "POST /pathways",
+                              "draws": "GET /draws", "audit": "POST /audit",
+                              "profiles": "GET /profiles"}}
 
     @app.get("/health")
     def health() -> dict:
@@ -242,6 +243,26 @@ def create_app(noc_model: Optional[NocModel] = None,
     @app.post("/sirs")
     def sirs(req: SirsRequest) -> dict:
         return _compute(sirs_bc, req.profile, offer=req.offer)
+
+    @app.post("/pathways")
+    def pathways(req: PathwaysRequest) -> dict:
+        """What the candidate qualifies for across every Express Entry pathway (general, the ten
+        2026 category-based selections, BC PNP), each cited. Fetches the live draws feed to add each
+        pathway's current cutoff and gap; a fetch failure degrades to an eligibility-only map (still
+        useful) rather than 500ing, because the eligibility verdict does not depend on a live cutoff."""
+        from ingest import ROUNDS_JSON_URL, parse_rounds_json, to_draws
+        from paths import eligible_pathways
+        profile = _compute(serde.profile_from_dict, req.profile)  # validate -> 422 on a bad profile
+        draws = []
+        try:
+            records = parse_rounds_json((draws_fetcher or _default_draws_fetcher)(),
+                                        source_url=ROUNDS_JSON_URL)
+            draws = to_draws(records)
+        except Exception:  # eligibility-only map when the feed is unavailable; never a guessed cutoff
+            draws = []
+        result = eligible_pathways(profile, draws=draws, as_of=serde._parse_date(req.as_of),
+                                   bc_offer=serde.bc_offer_from_dict(req.bc_offer))
+        return result.to_dict()
 
     @app.post("/reachable-paths")
     def reachable(req: ReachableRequest) -> dict:

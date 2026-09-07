@@ -163,6 +163,35 @@ def test_draws_endpoint_502_on_fetch_failure():
     assert r.status_code == 502
 
 
+def test_pathways_endpoint_reports_cited_eligibility():
+    doc = (pathlib.Path(__file__).parent.parent / "ingest" / "fixtures"
+           / "ee_rounds_sample.json").read_text()
+    # A civil engineer (NOC 21300, on the 2026 STEM list) with French second language.
+    profile = {"education": "masters-or-professional",
+               "first_language": {"speaking": 9, "listening": 9, "reading": 9, "writing": 9},
+               "date_of_birth": "1994-07-01", "canadian_work_years": 2, "noc_code": "21300",
+               "second_language": {"speaking": 8, "listening": 8, "reading": 8, "writing": 8},
+               "second_language_is_french": True}
+    r = _client(draws_fetcher=lambda: doc).post("/pathways",
+                                                json={"profile": profile, "as_of": "2026-09-07"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "french" in body["qualifying"] and "stem" in body["qualifying"]
+    french = next(p for p in body["pathways"] if p["slug"] == "french")
+    assert french["eligible"] is True and "canada.ca" in french["source_url"]
+
+
+def test_pathways_endpoint_degrades_to_eligibility_only_when_feed_down():
+    def boom():
+        raise ConnectionError("feed down")
+    profile = {"education": "bachelors-or-three-year",
+               "first_language": {"speaking": 9, "listening": 9, "reading": 9, "writing": 9},
+               "date_of_birth": "1996-07-01", "canadian_work_years": 1, "noc_code": "21300"}
+    r = _client(draws_fetcher=boom).post("/pathways", json={"profile": profile})
+    assert r.status_code == 200  # eligibility verdict does not need a live cutoff
+    assert any(p["slug"] == "stem" for p in r.json()["pathways"])
+
+
 # --- Optional live test: only with a real Claude model configured --------------------
 import os  # noqa: E402
 

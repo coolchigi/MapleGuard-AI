@@ -52,6 +52,7 @@ class ProfileInput(TypedDict, total=False):
     has_provincial_nomination: bool
     has_sibling_in_canada: bool
     canadian_post_secondary_years: int       # 0 none, 1-2 short, 3+ long
+    noc_code: str                            # NOC 2021 5-digit code; enables occupation-category checks
 
 
 BCArea = str  # one of: metro_vancouver | other_lower_mainland | rest_of_bc | northern_bc
