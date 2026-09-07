@@ -67,6 +67,15 @@ class ReachableRequest(BaseModel):
     bc_offer: Optional[dict[str, Any]] = None
 
 
+class PathwaysRequest(BaseModel):
+    profile: dict[str, Any] = Field(..., description="Candidate profile (validated by serde). "
+                                    "Include noc_code and any French second language for the "
+                                    "occupation and French category checks.")
+    as_of: Optional[str] = Field(default=None, description="ISO 'YYYY-MM-DD' to evaluate as of.")
+    bc_offer: Optional[dict[str, Any]] = Field(
+        default=None, description="Optional BC job offer for the BC PNP (SIRS) standing.")
+
+
 class DrawsResponse(BaseModel):
     """Documentation-only shape for /draws (the endpoint returns the tool dict directly)."""
     draws: list[dict[str, Any]]

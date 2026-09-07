@@ -275,6 +275,43 @@ def get_recent_draws(limit: int = 6, kind: Optional[str] = None) -> dict:
             "draws": draws, "needs_manual_check": flagged}
 
 
+@tool
+def get_eligible_pathways(profile: ProfileInput, as_of: Optional[str] = None,
+                          bc_offer: Optional[BCJobOfferInput] = None) -> dict:
+    """Show what this candidate qualifies for across EVERY Express Entry pathway, cited: the general
+    pool, the ten 2026 category-based selections (French, STEM, healthcare, trades, ...), and BC PNP.
+    This answers "what are my options" up front, the thing a candidate would otherwise only find by
+    digging (e.g. a strong CRS who never knew French-category draws sit far lower and that they clear
+    one). Each pathway carries the official eligibility verdict with its source, and, when a recent
+    draw exists, the candidate's standing against that cutoff plus the shortest move that closes any
+    gap. It fetches the latest cited draws itself; if the feed is unavailable it returns an
+    eligibility-only map rather than guessing a cutoff.
+
+    Args:
+        profile: The candidate profile. Include `noc_code` to check occupation categories and a
+            French second language to check the French category.
+        as_of: Optional ISO 'YYYY-MM-DD' to evaluate as of (age is date-dependent).
+        bc_offer: Optional BC job offer, used for the BC PNP (SIRS) standing.
+
+    Returns:
+        A dict with crs_total, qualifying[] (the pathways whose official test is met), and
+        pathways[] (every pathway with its cited verdict, standing, gap, and closing moves).
+    """
+    from paths import eligible_pathways
+    p = serde.profile_from_dict(profile)
+    # Enrich with the latest cited draws so each pathway shows its current cutoff and the gap. Same
+    # feed as get_recent_draws / the /draws API. A fetch failure degrades to an eligibility-only map.
+    draws = []
+    try:
+        records = parse_rounds_json(_DEPS.get_draws_fetcher()(), source_url=ROUNDS_JSON_URL)
+        draws = to_draws(records)  # drops needs_manual_check; never an uncited cutoff
+    except Exception:  # pragma: no cover - network/parse failure must not block the verdict
+        draws = []
+    result = eligible_pathways(p, draws=draws, as_of=serde._parse_date(as_of),
+                               bc_offer=serde.bc_offer_from_dict(bc_offer))
+    return result.to_dict()
+
+
 # --------------------------------------------------------------- model-backed tools
 @tool
 def audit_reference_letter(letter_text: str, noc_code: str) -> dict:
@@ -365,6 +402,7 @@ POSITION_TOOLS = [
     sirs_bc,
     reachable_paths,
     get_recent_draws,
+    get_eligible_pathways,
     ingest_draws,
 ]
 NOC_TOOLS = [

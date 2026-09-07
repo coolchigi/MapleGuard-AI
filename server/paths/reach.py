@@ -138,6 +138,12 @@ def _closing_moves(profile: Profile, cutoff: int, as_of: Optional[date]) -> list
     return results
 
 
+def closing_moves(profile: Profile, cutoff: int, as_of: Optional[date] = None) -> list[MoveResult]:
+    """Public: the single deterministic levers that would lift this profile's CRS to `cutoff`,
+    cheapest effort first. Shared by the pathways service so it never re-derives the move catalog."""
+    return _closing_moves(profile, cutoff, as_of)
+
+
 # ----------------------------------------------------------------- eligibility
 def _eligibility(profile: Profile, draw: Draw) -> tuple[Optional[bool], str]:
     if draw.kind == "general":
