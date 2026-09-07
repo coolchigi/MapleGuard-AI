@@ -14,6 +14,7 @@ Public surface:
   never_submit, never_assert_eligibility, GateDecision   the policy gates
 """
 from .citations import cite_gaps_from_corpus, retrieve_citation
+from .kb_corpus import kb_documents, write_kb_corpus
 from .config import Deployment, build_alert_ledger, build_memory, build_session_manager
 from .gates import (GateDecision, forbidden_tools, never_assert_eligibility,
                     never_assert_unsourced_draw, never_submit)
@@ -59,6 +60,8 @@ __all__ = [
     "DEFAULT_TRACE_ATTRIBUTES",
     "cite_gaps_from_corpus",
     "retrieve_citation",
+    "kb_documents",
+    "write_kb_corpus",
     "Deployment",
     "build_memory",
     "build_session_manager",
