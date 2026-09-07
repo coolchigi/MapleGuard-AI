@@ -186,6 +186,22 @@ def build_profile_store(config: Deployment):
     raise ValueError(f"unknown profiles_backend {config.profiles_backend!r}")
 
 
+DEFAULT_ALERTS_DIR = ".mapleguard/alerts"
+
+
+def build_alert_ledger(env: Optional[dict] = None):
+    """The per-user notification store + dedup memory the monitor writes and the API's /alerts feed
+    reads. DynamoDB when MAPLEGUARD_ALERTS_TABLE is set (deploy: the monitor Lambda and the API
+    share it), else a local file ledger (dev). Same shape both ways, so the swap is config only."""
+    e = os.environ if env is None else env
+    table = e.get("MAPLEGUARD_ALERTS_TABLE")
+    if table:
+        from .stores_aws import DynamoDBAlertLedger
+        return DynamoDBAlertLedger(table)
+    from .monitor import FileAlertLedger
+    return FileAlertLedger(e.get("MAPLEGUARD_ALERTS_DIR") or DEFAULT_ALERTS_DIR)
+
+
 def build_session_manager(session_id: str, config: Deployment) -> Optional[Any]:
     """The SessionManager for this deployment, or None if sessions are disabled.
 

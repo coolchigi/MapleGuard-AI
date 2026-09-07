@@ -40,7 +40,8 @@ def create_app(noc_model: Optional[NocModel] = None,
                corpus: Any = None,
                profile_store: Any = None,
                brief_narrator: Any = None,
-               letter_scrubber: Any = None):
+               letter_scrubber: Any = None,
+               alert_ledger: Any = None):
     """Build the FastAPI app. `noc_model` injects matcher+corrector (a fake in tests); if None,
     it is built from the environment. `draws_fetcher` is a callable returning the raw IRCC
     rounds JSON for `/draws` (injected in tests; defaults to the live fetch). `corpus` is an
@@ -59,6 +60,9 @@ def create_app(noc_model: Optional[NocModel] = None,
         from agent.config import Deployment, build_profile_store
         profile_store = build_profile_store(Deployment.from_env())
     scrubber = letter_scrubber if letter_scrubber is not None else build_letter_scrubber()
+    if alert_ledger is None:
+        from agent.config import build_alert_ledger
+        alert_ledger = build_alert_ledger()
 
     def _scrub_letter(letter: Optional[dict]):
         """Redact PII from a letter's text before it is persisted. Returns (letter, scrubbed) where
@@ -121,7 +125,7 @@ def create_app(noc_model: Optional[NocModel] = None,
                 "endpoints": {"health": "GET /health", "dashboard": "POST /dashboard",
                               "position": "POST /position", "pathways": "POST /pathways",
                               "draws": "GET /draws", "audit": "POST /audit",
-                              "profiles": "GET /profiles"}}
+                              "profiles": "GET /profiles", "alerts": "GET /profiles/{id}/alerts"}}
 
     @app.get("/health")
     def health() -> dict:
@@ -209,6 +213,14 @@ def create_app(noc_model: Optional[NocModel] = None,
         if sp is None:
             raise HTTPException(status_code=404, detail=f"no monitored profile {profile_id!r}")
         return sp.to_dict()
+
+    @app.get("/profiles/{profile_id}/alerts")
+    def profile_alerts(profile_id: str) -> dict:
+        """The candidate's notification feed: the cited alerts the autonomous monitor has recorded
+        for this profile (a new draw in a pathway they qualify for, or a deadline approaching),
+        newest first. This is the read side of the end-to-end loop, the monitor writes the ledger,
+        the dashboard reads it here. Empty list for a profile with no alerts yet."""
+        return {"profile_id": profile_id, "alerts": alert_ledger.list_for(profile_id)}
 
     # ---------------------------------------------------------------- deterministic compute
     @app.post("/position")

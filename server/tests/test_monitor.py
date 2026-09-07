@@ -138,3 +138,74 @@ def test_narrator_summary_is_attached_without_changing_the_decision():
     assert result.alerts[0].summary.startswith("A new general draw")
     # Narration adds prose only; the cited payload is unchanged.
     assert result.alerts[0].citations
+
+
+# --- Eligibility-driven relevance + deadline trigger + the per-user ledger -------------
+from agent.monitor import InMemoryAlertLedger, FileAlertLedger, MonitorDeps  # noqa: E402
+
+# A registered nurse (NOC 31301 is on the 2026 healthcare list) with a low score: in-category for
+# healthcare but far below its cutoff. Their category's bar moving is still relevant to them.
+HEALTHCARE_LOW = {
+    "education": "secondary",
+    "first_language": {"speaking": 6, "listening": 6, "reading": 6, "writing": 6},
+    "date_of_birth": "1990-07-01", "canadian_work_years": 0, "noc_code": "31301",
+}
+
+
+def test_category_draw_alerts_an_in_category_profile_even_below_cutoff():
+    result = tick(_deps([StoredProfile("nurse", HEALTHCARE_LOW)]), as_of="2026-09-07")
+    draw_alerts = [a for a in result.alerts if a.kind == "draw"]
+    assert draw_alerts, "an in-category profile should be alerted when its category draws"
+    impacts = [i for a in draw_alerts for i in a.impact]
+    healthcare = [i for i in impacts if i.get("category") == "healthcare"]
+    assert healthcare, "the healthcare draw should be surfaced to a healthcare-NOC profile"
+    assert all(i["eligible"] is True for i in healthcare)
+    assert any(i["clears"] is False for i in healthcare)  # below cutoff, still surfaced
+
+
+def test_ineligible_profile_is_not_alerted_on_a_category_draw():
+    # No NOC, no French, weak score: not in any category and cannot reach general -> silence.
+    result = tick(_deps([StoredProfile("weak", WEAK_PROFILE)]), as_of="2026-09-07")
+    assert [a for a in result.alerts if a.kind == "draw"] == []
+
+
+# A profile whose language test expires within the 60-day horizon, with no category eligibility so
+# only the deadline alert fires. Test date 2024-10-01 -> expiry 2026-10-01, ~24 days after as_of.
+EXPIRING_SOON = {
+    "education": "secondary",
+    "first_language": {"speaking": 6, "listening": 6, "reading": 6, "writing": 6},
+    "date_of_birth": "1996-07-01", "first_language_test_date": "2024-10-01",
+}
+
+
+def _deps_with_ledger(profiles, ledger):
+    return MonitorDeps(fetch_rounds=lambda: FIXTURE.read_text(),
+                       profiles=InMemoryProfileStore(profiles),
+                       snapshots=InMemorySnapshotStore(), sink=CollectingAlertSink(),
+                       source_url=SOURCE, ledger=ledger)
+
+
+def test_deadline_alert_fires_within_horizon_and_dedups_across_ticks():
+    ledger = InMemoryAlertLedger()
+    deps = _deps_with_ledger([StoredProfile("p", EXPIRING_SOON)], ledger)
+    first = tick(deps, as_of="2026-09-07")
+    deadline = [a for a in first.alerts if a.kind == "deadline"]
+    assert len(deadline) == 1
+    assert deadline[0].impact[0]["deadline_kind"] == "test_expiry"
+    assert deadline[0].impact[0]["crs_delta"] < 0 and deadline[0].impact[0]["days_away"] <= 60
+    # A second tick on the same feed and date must NOT re-send the deadline alert (ledger dedup).
+    second = tick(deps, as_of="2026-09-07")
+    assert [a for a in second.alerts if a.kind == "deadline"] == []
+    # The feed shows exactly one deadline notification for this user.
+    feed = ledger.list_for("p")
+    assert sum(1 for a in feed if a["kind"] == "deadline") == 1
+
+
+def test_alert_ledger_records_once_and_feeds_newest_first(tmp_path):
+    for ledger in (InMemoryAlertLedger(), FileAlertLedger(str(tmp_path))):
+        assert ledger.record("u", "e1", {"event_id": "e1", "as_of": "2026-09-01"}) is True
+        assert ledger.record("u", "e1", {"event_id": "e1", "as_of": "2026-09-01"}) is False  # dup
+        assert ledger.record("u", "e2", {"event_id": "e2", "as_of": "2026-09-05"}) is True
+        feed = ledger.list_for("u")
+        assert [a["event_id"] for a in feed] == ["e2", "e1"]  # newest first
+        assert ledger.list_for("someone-else") == []

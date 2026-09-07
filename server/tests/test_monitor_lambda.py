@@ -133,12 +133,14 @@ def test_lambda_handler_runs_a_full_tick_offline():
                                                                      "profile": STRONG_PROFILE})}])
     snap_table = FakeTable()
     sns = FakeSns()
+    from agent.monitor import InMemoryAlertLedger
     deps = build_monitor_deps(
         env={"MAPLEGUARD_ROUNDS_URL": SOURCE},
         fetch_rounds=FIXTURE.read_text,
         profiles=DynamoDBProfileStore(table=profile_table),
         snapshots=DynamoDBSnapshotStore(table=snap_table),
         sink=SnsAlertSink(topic_arn="arn:aws:sns:us-east-1:0:mg", client=sns),
+        ledger=InMemoryAlertLedger(),  # isolated per test (default File ledger would persist)
     )
     out = lambda_handler({"as_of": "2026-08-25"}, None, deps=deps)
     # First run: every fixture draw is new; the strong profile gets a cited alert, published.
@@ -155,3 +157,30 @@ def test_default_path_requires_table_env():
     import pytest
     with pytest.raises(RuntimeError, match="MAPLEGUARD_PROFILES_TABLE"):
         build_monitor_deps(env={}, fetch_rounds=lambda: "{}")
+
+
+class FakeLedgerTable:
+    """A minimal composite-key (profile_id + event_id) stand-in for a boto3 Table. `query` ignores
+    the KeyConditionExpression and returns all items, which is enough for a single-profile test."""
+    def __init__(self):
+        self.items = {}
+
+    def get_item(self, Key):
+        it = self.items.get((Key["profile_id"], Key["event_id"]))
+        return {"Item": dict(it)} if it else {}
+
+    def put_item(self, Item):
+        self.items[(Item["profile_id"], Item["event_id"])] = dict(Item)
+        return {}
+
+    def query(self, **kwargs):
+        return {"Items": [dict(v) for v in self.items.values()]}
+
+
+def test_dynamodb_alert_ledger_dedups_and_feeds_newest_first():
+    from agent.stores_aws import DynamoDBAlertLedger
+    led = DynamoDBAlertLedger(table=FakeLedgerTable())
+    assert led.record("p", "e1", {"event_id": "e1", "as_of": "2026-09-01"}) is True
+    assert led.record("p", "e1", {"event_id": "e1", "as_of": "again"}) is False  # dedup
+    assert led.record("p", "e2", {"event_id": "e2", "as_of": "2026-09-05"}) is True
+    assert [a["event_id"] for a in led.list_for("p")] == ["e2", "e1"]  # newest first

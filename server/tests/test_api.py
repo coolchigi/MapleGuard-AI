@@ -213,3 +213,24 @@ def test_audit_and_draft_live_model():
     # The model must never assert eligibility in the drafted letter.
     from agent.orchestrator import screen_response
     assert screen_response(d.json()["letter_text"]).allowed
+
+
+def test_alerts_endpoint_serves_the_per_user_notification_feed():
+    from agent.monitor import InMemoryAlertLedger
+    from api import create_app
+    from fastapi.testclient import TestClient
+    ledger = InMemoryAlertLedger()
+    ledger.record("u1", "draw:441", {"event_id": "draw:441", "kind": "draw",
+                                     "as_of": "2026-09-07", "impact": [{"category": "healthcare"}]})
+    ledger.record("u1", "deadline:test_expiry:2026-10-01",
+                  {"event_id": "deadline:test_expiry:2026-10-01", "kind": "deadline",
+                   "as_of": "2026-09-05"})
+    app = create_app(noc_model=_model(True), alert_ledger=ledger)
+    c = TestClient(app)
+    r = c.get("/profiles/u1/alerts")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["profile_id"] == "u1"
+    assert {a["event_id"] for a in body["alerts"]} == {"draw:441", "deadline:test_expiry:2026-10-01"}
+    # A profile with no alerts gets an empty feed, not a 404.
+    assert c.get("/profiles/nobody/alerts").json()["alerts"] == []
