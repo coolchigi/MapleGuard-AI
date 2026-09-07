@@ -75,33 +75,49 @@ match.
 ## 2. Bedrock Knowledge Base — the cited corpus (memory backend `bedrock_kb`)
 
 Turns the seeded `TestMemoryStore` into a live retrieval over IRCC / NOC reference text (the
-passages the agent quotes and cites; never the cutoff numbers the engine scores against — see
-the bright line in `agent/memory.py`).
+passages the agent quotes and cites, never the cutoff numbers the engine scores against, see the
+bright line in `agent/memory.py`). The KB sits BESIDE the deterministic rules, never in front:
+it grounds explanations, it does not decide a score or a verdict.
 
-1. Create an S3 bucket for the source documents and upload the NOC passages. The exact
-   passages the dev corpus seeds are produced by `agent.noc_seed_passages()`:
+**Use S3 Vectors, not OpenSearch Serverless.** On the $50 budget OpenSearch Serverless is
+disqualifying (it bills per OCU-hour whether queried or not). S3 Vectors is pay-per-use with no
+standing collection, and Bedrock Knowledge Bases support it as a first-class vector store.
+
+1. Build the corpus and upload it. The passages are the SAME source-verified NOC 2021 records the
+   ingestion pipeline produced (`agent.write_kb_corpus` reuses `agent.noc_seed_passages`), written
+   as `<doc>.txt` + `<doc>.txt.metadata.json` sidecars (the Bedrock KB S3 data-source shape, each
+   carrying its canada.ca `source`):
 
    ```bash
+   cd server && PYTHONPATH=. python3 -c "from agent import write_kb_corpus; print(write_kb_corpus('../infra/kb/corpus'))"
    aws s3 mb s3://mapleguard-corpus-<suffix>
-   # write agent.noc_seed_passages() to text/JSON files, then:
-   aws s3 cp ./corpus/ s3://mapleguard-corpus-<suffix>/ --recursive
+   aws s3 cp ../infra/kb/corpus/ s3://mapleguard-corpus-<suffix>/ --recursive
    ```
 
-2. Create the Knowledge Base with a vector store behind it (OpenSearch Serverless is the
-   default managed option; a CUSTOM data source also works for direct writes). The console
-   flow (Bedrock -> Knowledge Bases -> Create) provisions the vector store, embeddings model,
-   and data source in one wizard. Note the **Knowledge Base id** it returns.
+2. Create the Knowledge Base on an **S3 Vectors** store. The console flow (Bedrock -> Knowledge
+   Bases -> Create -> vector store: **Amazon S3 Vectors**) provisions the S3 vector bucket + index,
+   the embeddings model (Titan Text Embeddings V2), and the S3 data source in one wizard, and is the
+   least error-prone path. (Terraform has no S3 Vectors support yet, hashicorp/terraform-provider-aws
+   issues #43438 / #44871 / #45395, so this stays out of `infra/*.tf`. The boto3 equivalent is
+   `bedrock-agent create_knowledge_base` with `storageConfiguration.type = "S3_VECTORS"` and an
+   `s3VectorsConfiguration` of `{vectorBucketArn, indexArn}`, verify the exact field names against
+   current boto3 at run time since the API is new.) Note the **Knowledge Base id** it returns.
 
-3. Sync the data source so the documents are ingested, then point MapleGuard at it:
+3. Sync the data source so the documents are ingested (console "Sync", or `start_ingestion_job`),
+   then point MapleGuard at it:
 
    ```bash
    export MAPLEGUARD_MEMORY_BACKEND=bedrock_kb
    export MAPLEGUARD_KB_ID=<knowledge base id>
    export MAPLEGUARD_KB_REGION=$AWS_REGION
    ```
+   Set these on the API Lambda and the AgentCore runtime (via `agentcore launch --env ...`) so the
+   hosted agent's `/audit` citations come from live retrieval. The code seam already exists
+   (`agent.build_kb_memory` over `BedrockKnowledgeBaseStore`), so no code change is needed to turn
+   it on. Re-run the corpus build + upload + sync whenever the NOC corpus grows.
 
-IAM for the runtime role: `bedrock:Retrieve`, `bedrock:GetKnowledgeBase`, and
-`bedrock:IngestKnowledgeBaseDocuments` (writes only, if the research worker writes passages).
+IAM for the runtime role: `bedrock:Retrieve`, `bedrock:RetrieveAndGenerate`, and
+`bedrock:GetKnowledgeBase`.
 
 ---
 
