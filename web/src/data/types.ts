@@ -186,3 +186,46 @@ export type RecentDraw = {
 
 /** The bundled `demo.json` is a `DashboardData`; the alias keeps the older name working. */
 export type DemoData = DashboardData;
+
+// ----------------------------------------------------------- pathways (POST /pathways)
+/** A single lever that would close a pathway's gap, cheapest first. */
+export type ClosingMove = {
+  move: string;
+  effort: string;
+  new_score: number;
+  closes_gap: boolean;
+};
+
+/** One pathway's cited verdict for the candidate, plus their standing against its latest draw.
+ *  `eligible` is the NARROW official test: true (in-category / meets the language rule), false
+ *  (not in the published list / below NCLC 7), or null (cannot decide without more input, e.g. an
+ *  occupation category with no NOC on file). It is never a claim of overall PR eligibility. */
+export type PathwayStanding = {
+  slug: string;
+  title: string;
+  rule_kind: "language" | "noc_list" | "general" | "pnp" | string;
+  eligible: boolean | null;
+  eligibility_reason: string;
+  source_url: string;
+  source_date: string;
+  additional_requirements: string;
+  score_kind: "CRS" | "SIRS" | string;
+  your_score: number | null;
+  latest_cutoff: number | null;
+  latest_draw_date: string | null;
+  latest_draw_source: string | null;
+  clears: boolean | null;
+  gap: number | null;
+  closing_moves: ClosingMove[];
+  note: string;
+};
+
+/** The `POST /pathways` response: every pathway's standing for one candidate, plus the shortlist
+ *  they qualify for. Coverage is the federal general pool, the 2026 category selections, and BC
+ *  PNP only. Other provincial programs (Ontario OINP, etc.) are NOT modelled yet. */
+export type PathwaysData = {
+  as_of: string;
+  crs_total: number;
+  qualifying: string[];
+  pathways: PathwayStanding[];
+};

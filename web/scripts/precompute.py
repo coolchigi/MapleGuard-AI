@@ -22,7 +22,8 @@ import pathlib
 
 from api.dashboard import benchmark_from_records, build_dashboard
 from crs import LanguageScores, Profile
-from ingest import parse_rounds_json
+from ingest import parse_rounds_json, to_draws
+from paths import eligible_pathways
 
 # --- the demo profile (the shape tests/test_timeline.py uses) --------------
 AS_OF = date(2026, 8, 22)          # the "Assessment" date shown on the panels
@@ -51,10 +52,13 @@ _ROUNDS_FIXTURE = (pathlib.Path(__file__).resolve().parents[2]
                    / "server" / "ingest" / "fixtures" / "ee_rounds_sample.json")
 
 
+def _records() -> list:
+    return parse_rounds_json(_ROUNDS_FIXTURE.read_text(encoding="utf-8"),
+                             source_url="https://www.canada.ca/rounds.json")
+
+
 def _benchmark() -> dict:
-    records = parse_rounds_json(_ROUNDS_FIXTURE.read_text(encoding="utf-8"),
-                                source_url="https://www.canada.ca/rounds.json")
-    return benchmark_from_records(records)
+    return benchmark_from_records(_records())
 
 
 def build() -> dict:
@@ -67,16 +71,30 @@ def build() -> dict:
     )
 
 
-def main() -> None:
-    data = build()
+def build_pathways() -> dict:
+    """The offline `/pathways` document for the demo profile: every Express Entry pathway's cited
+    verdict + standing, computed by the same `eligible_pathways` the live endpoint calls, over the
+    saved rounds fixture. So the Pathways tab reads real, cited data with the server unreachable."""
+    return eligible_pathways(PROFILE, draws=to_draws(_records()), as_of=AS_OF).to_dict()
+
+
+def _write(name: str, data: dict, tail: str) -> None:
     here = os.path.dirname(os.path.abspath(__file__))
-    out = os.path.join(here, "..", "src", "data", "demo.json")
+    out = os.path.join(here, "..", "src", "data", name)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
-    print(f"wrote {os.path.relpath(out)}  "
-          f"(CRS {data['position']['total']} -> {data['trajectory']['endTotal']})")
+    print(f"wrote {os.path.relpath(out)}  ({tail})")
+
+
+def main() -> None:
+    data = build()
+    _write("demo.json", data,
+           f"CRS {data['position']['total']} -> {data['trajectory']['endTotal']}")
+    pw = build_pathways()
+    _write("pathways.demo.json", pw,
+           f"{len(pw['qualifying'])} qualifying of {len(pw['pathways'])} pathways")
 
 
 if __name__ == "__main__":

@@ -1,31 +1,33 @@
 "use client";
 
 /**
- * The dashboard shell: three tabs over one document.
+ * The dashboard shell: PROFILE collects the inputs; POSITION and TIME MACHINE render the
+ * `/dashboard` document the Python engine returned; PATHWAYS renders the `/pathways` document
+ * (what the candidate qualifies for). One submit computes both, for the same profile, so the tabs
+ * can never disagree about who is on screen.
  *
- * PROFILE collects the inputs, POSITION and TIME MACHINE render what the Python engine returned
- * for them. All three read the same `useDashboard` state, so the panels can never disagree with
- * each other — they are two views of a single response, not two independent fetches.
- *
- * On a successful compute the view moves to POSITION: the user asked a question by submitting,
- * and the answer is on another tab, so leaving them on the form would hide the result. A failure
- * keeps them on the form, where the reason is.
+ * On a successful compute the view moves to POSITION: the user asked a question by submitting, and
+ * the answer is on another tab, so leaving them on the form would hide the result. A failure keeps
+ * them on the form, where the reason is.
  */
 import React, { useCallback, useState } from "react";
 
+import { PathwaysPanel } from "@/components/PathwaysPanel";
 import { PositionPanel } from "@/components/PositionPanel";
 import { ProfileForm } from "@/components/ProfileForm";
 import { SourceBar } from "@/components/SourceBar";
 import { TimeMachine } from "@/components/TimeMachine";
 import type { Profile } from "@/data/types";
 import { useDashboard } from "@/hooks/useDashboard";
+import { usePathways } from "@/hooks/usePathways";
 import { DEFAULT_PROFILE } from "@/lib/profile";
 
-type Tab = "profile" | "position" | "time";
+type Tab = "profile" | "position" | "pathways" | "time";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "profile", label: "PROFILE" },
   { id: "position", label: "POSITION" },
+  { id: "pathways", label: "PATHWAYS" },
   { id: "time", label: "TIME MACHINE" },
 ];
 
@@ -33,14 +35,18 @@ export default function Page() {
   const [tab, setTab] = useState<Tab>("profile");
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const { data, source, loading, error, compute, reset } = useDashboard();
+  const pathways = usePathways();
 
   const submit = useCallback(
     async (submitted: Profile) => {
       setProfile(submitted);
+      // Both documents describe the same candidate; compute them together so PATHWAYS is ready
+      // the moment the user switches to it, and never shows a different profile than POSITION.
+      void pathways.compute(submitted);
       const ok = await compute(submitted);
       if (ok) setTab("position");
     },
-    [compute],
+    [compute, pathways],
   );
 
   // A rejected profile is the form's problem to show; an unreachable server is the whole app's,
@@ -89,6 +95,7 @@ export default function Page() {
         />
       )}
       {tab === "position" && <PositionPanel data={data} />}
+      {tab === "pathways" && <PathwaysPanel data={pathways.data} />}
       {tab === "time" && <TimeMachine data={data} />}
     </main>
   );
