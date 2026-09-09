@@ -49,7 +49,7 @@ resource "aws_iam_role_policy" "api" {
   role  = aws_iam_role.api[0].id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         # Read/write the monitored-profile table (POST/GET /profiles) — the store the monitor lists.
         Effect   = "Allow"
@@ -74,7 +74,17 @@ resource "aws_iam_role_policy" "api" {
         Action   = ["bedrock:ApplyGuardrail"]
         Resource = [aws_bedrock_guardrail.pii[0].guardrail_arn]
       },
-    ]
+      ],
+      # Retrieve cited NOC passages from the Knowledge Base (only when one is wired). Scoped to the
+      # single KB; the KB's own role handles the S3 Vectors reads (see infra/kb/).
+      var.knowledge_base_id != "" ? [{
+        Effect = "Allow"
+        Action = ["bedrock:Retrieve", "bedrock:RetrieveAndGenerate", "bedrock:GetKnowledgeBase"]
+        Resource = [
+          "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:knowledge-base/${var.knowledge_base_id}"
+        ]
+      }] : []
+    )
   })
 }
 
@@ -103,6 +113,11 @@ resource "aws_lambda_function" "api" {
       MAPLEGUARD_GUARDRAIL_ID      = aws_bedrock_guardrail.pii[0].guardrail_id
       MAPLEGUARD_GUARDRAIL_VERSION = aws_bedrock_guardrail_version.pii[0].version
       MAPLEGUARD_GUARDRAIL_REGION  = var.region
+      # Retrieve cited NOC passages from the Knowledge Base when one is wired (make kb-up prints the
+      # id; pass it as -var knowledge_base_id=...). Empty id keeps the seeded dev memory.
+      MAPLEGUARD_MEMORY_BACKEND = var.knowledge_base_id != "" ? "bedrock_kb" : "dev"
+      MAPLEGUARD_KB_ID          = var.knowledge_base_id
+      MAPLEGUARD_KB_REGION      = var.region
     }
   }
 }
