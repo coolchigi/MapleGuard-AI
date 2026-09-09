@@ -39,3 +39,9 @@ variable "bedrock_model_id" {
   type        = string
   default     = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 }
+
+variable "knowledge_base_id" {
+  description = "Bedrock Knowledge Base id from infra/kb/provision_s3_vectors_kb.py (make kb-up). When set, the API Lambda retrieves cited NOC passages from it (MAPLEGUARD_MEMORY_BACKEND=bedrock_kb); empty leaves the Lambda on the seeded dev memory. The KB itself is provisioned by that script, not Terraform (no S3 Vectors provider support)."
+  type        = string
+  default     = ""
+}
