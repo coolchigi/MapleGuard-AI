@@ -3,3 +3,4 @@
 *.tfstate.*
 build/
 .terraform.lock.hcl
+kb/corpus

@@ -13,5 +13,6 @@ venv/
 # Local agent worktrees / session state
 .claude/
 
-# Secrets
+docs/blog/
+
 .env
