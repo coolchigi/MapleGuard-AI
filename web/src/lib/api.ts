@@ -8,7 +8,7 @@
  * Base URL comes from `NEXT_PUBLIC_API_BASE_URL` (see `.env.local.example`); it must be inlined
  * at build time, so it is read as a whole property access rather than destructured off `env`.
  */
-import type { DashboardData, DashboardRequest, Profile } from "@/data/types";
+import type { DashboardData, DashboardRequest, PathwaysData, Profile } from "@/data/types";
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
@@ -145,6 +145,33 @@ export async function fetchDashboard(
   const data = await postJson<unknown>("/dashboard", request, options);
   if (!isDashboardData(data)) {
     throw new ApiError("malformed", "the API answered, but not with a dashboard document");
+  }
+  return data;
+}
+
+/** Enough of a shape check that a wrong-service 200 is caught here, not three components deep. */
+function isPathwaysData(value: unknown): value is PathwaysData {
+  if (typeof value !== "object" || value === null) return false;
+  const d = value as Partial<PathwaysData>;
+  return (
+    typeof d.crs_total === "number" &&
+    Array.isArray(d.qualifying) &&
+    Array.isArray(d.pathways)
+  );
+}
+
+/**
+ * Every Express Entry pathway's cited verdict for one profile: what they qualify for now, and
+ * where they stand against each pathway's latest draw. Takes the SAME `Profile` the form builds.
+ * Throws `ApiError`; callers decide whether to fall back (see `ApiError.isFallbackAppropriate`).
+ */
+export async function fetchPathways(
+  request: DashboardRequest,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<PathwaysData> {
+  const data = await postJson<unknown>("/pathways", request, options);
+  if (!isPathwaysData(data)) {
+    throw new ApiError("malformed", "the API answered, but not with a pathways document");
   }
   return data;
 }

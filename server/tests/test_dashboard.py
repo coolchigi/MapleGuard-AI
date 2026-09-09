@@ -328,6 +328,26 @@ def test_the_precomputed_demo_file_is_what_the_builder_produces():
     assert fresh == on_disk
 
 
+def test_the_precomputed_pathways_file_is_what_the_builder_produces():
+    """web/src/data/pathways.demo.json is the Pathways tab's offline fallback. If this fails, the
+    engine moved and the file is stale: re-run `PYTHONPATH=server python3 web/scripts/precompute.py`."""
+    import json
+    import pathlib
+
+    from ingest import to_draws
+    from paths import eligible_pathways
+
+    demo = pathlib.Path(__file__).resolve().parents[2] / "web" / "src" / "data" / "pathways.demo.json"
+    if not demo.exists():
+        pytest.skip("web/src/data/pathways.demo.json not present")
+    on_disk = json.loads(demo.read_text(encoding="utf-8"))
+
+    from ingest import parse_rounds_json
+    draws = to_draws(parse_rounds_json(_rounds_feed(), source_url=_FEED_URL))
+    fresh = eligible_pathways(_profile(), draws=draws, as_of=AS_OF).to_dict()
+    assert fresh == on_disk
+
+
 # --- the endpoint ----------------------------------------------------------------------
 fastapi = pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
