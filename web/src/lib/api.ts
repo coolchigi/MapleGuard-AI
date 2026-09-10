@@ -8,7 +8,7 @@
  * Base URL comes from `NEXT_PUBLIC_API_BASE_URL` (see `.env.local.example`); it must be inlined
  * at build time, so it is read as a whole property access rather than destructured off `env`.
  */
-import type { DashboardData, DashboardRequest, PathwaysData, Profile } from "@/data/types";
+import type { Alert, DashboardData, DashboardRequest, PathwaysData, Profile } from "@/data/types";
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
@@ -200,6 +200,53 @@ export async function saveProfile(
     { profile, ...(id ? { id } : {}), ...(bcOffer ? { bc_offer: bcOffer } : {}) },
     fetchOpts,
   );
+}
+
+async function getJson<T>(
+  path: string,
+  { signal, timeoutMs = DEFAULT_TIMEOUT_MS }: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<T> {
+  const timer = new AbortController();
+  const timeout = setTimeout(() => timer.abort(), timeoutMs);
+  const onCallerAbort = () => timer.abort();
+  signal?.addEventListener("abort", onCallerAbort);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "GET",
+      signal: timer.signal,
+      cache: "no-store",
+    });
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    if (timer.signal.aborted) {
+      throw new ApiError("timeout", `the API did not answer within ${timeoutMs / 1000}s`);
+    }
+    throw new ApiError("offline", `cannot reach the API at ${API_BASE_URL}`);
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", onCallerAbort);
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const detail = readDetail(body, response.statusText || `HTTP ${response.status}`);
+    throw new ApiError(response.status >= 500 ? "server" : "rejected", detail, response.status);
+  }
+
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new ApiError("malformed", "the API returned a body that is not JSON");
+  }
+}
+
+export async function fetchAlerts(
+  profileId: string,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<Alert[]> {
+  return getJson<Alert[]>(`/profiles/${encodeURIComponent(profileId)}/alerts`, options);
 }
 
 export type HealthResponse = {

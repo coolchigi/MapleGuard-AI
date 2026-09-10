@@ -12,6 +12,7 @@
  */
 import React, { useCallback, useState } from "react";
 
+import { AlertsPanel } from "@/components/AlertsPanel";
 import { PathwaysPanel } from "@/components/PathwaysPanel";
 import { PositionPanel } from "@/components/PositionPanel";
 import { ProfileForm } from "@/components/ProfileForm";
@@ -20,22 +21,25 @@ import { TimeMachine } from "@/components/TimeMachine";
 import type { Profile } from "@/data/types";
 import { useDashboard } from "@/hooks/useDashboard";
 import { usePathways } from "@/hooks/usePathways";
+import { useWatchCase } from "@/hooks/useWatchCase";
 import { DEFAULT_PROFILE } from "@/lib/profile";
 
-type Tab = "profile" | "position" | "pathways" | "time";
+type Tab = "profile" | "position" | "pathways" | "time" | "alerts";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "profile", label: "PROFILE" },
   { id: "position", label: "POSITION" },
   { id: "pathways", label: "PATHWAYS" },
   { id: "time", label: "TIME MACHINE" },
+  { id: "alerts", label: "ALERTS" },
 ];
 
 export default function Page() {
   const [tab, setTab] = useState<Tab>("profile");
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
-  const { data, source, loading, error, compute, reset } = useDashboard();
+  const { data, source, loading, error, compute, reset, computedFor } = useDashboard();
   const pathways = usePathways();
+  const watchCase = useWatchCase();
 
   const submit = useCallback(
     async (submitted: Profile) => {
@@ -97,6 +101,20 @@ export default function Page() {
       {tab === "position" && <PositionPanel data={data} />}
       {tab === "pathways" && <PathwaysPanel data={pathways.data} />}
       {tab === "time" && <TimeMachine data={data} />}
+      {tab === "alerts" && (
+        <AlertsPanel
+          profileId={watchCase.profileId}
+          watched={watchCase.watched}
+          saving={watchCase.saving}
+          saveError={watchCase.saveError}
+          alerts={watchCase.alerts}
+          alertsLoading={watchCase.alertsLoading}
+          alertsError={watchCase.alertsError}
+          onWatch={() => void watchCase.watch(profile)}
+          onRefresh={() => void watchCase.refreshAlerts()}
+          canWatch={computedFor !== null}
+        />
+      )}
     </main>
   );
 }

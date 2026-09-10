@@ -229,3 +229,20 @@ export type PathwaysData = {
   qualifying: string[];
   pathways: PathwayStanding[];
 };
+
+// ----------------------------------------------------------- alerts (GET /profiles/{id}/alerts)
+export type Alert = {
+  profile_id: string;
+  as_of: string;
+  kind: "draw" | "deadline" | "policy" | string;
+  event_id: string;
+  summary: string;
+  new_draws: { name?: string; score?: number; date?: string; category?: string | null; source_url?: string | null }[];
+  impact: { pathway?: string; before?: number | null; after?: number | null; note?: string }[];
+  reachable_alternatives: { pathway?: string; gap?: number; closing_move?: string }[];
+  deadlines: { label: string; date: string; delta: number; note: string } | null;
+  citations: string[];
+  crs: { before: number; after: number } | null;
+  letter_gaps: { duty: string; status: string }[] | null;
+  policy_change: { summary: string; source_url: string } | null;
+};
