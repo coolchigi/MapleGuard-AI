@@ -88,16 +88,19 @@ resource "aws_iam_role_policy" "api" {
 }
 
 resource "aws_lambda_function" "api" {
-  count            = var.api_enabled ? 1 : 0
-  function_name    = "${local.name}-api"
-  role             = aws_iam_role.api[0].arn
-  handler          = "api.lambda_handler.handler"
-  runtime          = "python3.12"
-  architectures    = ["x86_64"] # matches the manylinux2014_x86_64 wheels build-api.sh installs
-  timeout          = 30
-  memory_size      = 512
-  filename         = data.archive_file.api[0].output_path
-  source_code_hash = data.archive_file.api[0].output_base64sha256
+  count         = var.api_enabled ? 1 : 0
+  function_name = "${local.name}-api"
+  role          = aws_iam_role.api[0].arn
+  handler       = "api.lambda_handler.handler"
+  runtime       = "python3.12"
+  architectures = ["x86_64"] # matches the manylinux2014_x86_64 wheels build-api.sh installs
+  timeout       = 30
+  memory_size   = 512
+  # Hard cap on concurrent executions: bounds worst-case Bedrock spend from the public Function URL
+  # no matter who calls it. This is the actual money guardrail (the budget only alerts).
+  reserved_concurrent_executions = var.api_reserved_concurrency
+  filename                       = data.archive_file.api[0].output_path
+  source_code_hash               = data.archive_file.api[0].output_base64sha256
 
   environment {
     variables = {

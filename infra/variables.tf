@@ -51,3 +51,21 @@ variable "policy_url" {
   type        = string
   default     = ""
 }
+
+variable "api_reserved_concurrency" {
+  description = "Hard cap on concurrent API Lambda executions. This is the real blast-radius limit on Bedrock spend: at most this many /audit|/draft|/brief calls can run at once, no matter who has the public Function URL. Low enough to bound cost, high enough for a demo crowd on the deterministic reads. Set -1 to remove the reservation (unbounded)."
+  type        = number
+  default     = 5
+}
+
+variable "monthly_budget_limit" {
+  description = "AWS monthly cost budget in USD. This ALERTS (does not cap) — it is the early-warning to pair with api_reserved_concurrency, which is the actual cap."
+  type        = string
+  default     = "10"
+}
+
+variable "budget_alert_email" {
+  description = "Email to send budget threshold alerts to (50/80/100% of monthly_budget_limit). Empty creates the budget with no notification (it still tracks spend in the console, but warns no one). Set it to actually get warned."
+  type        = string
+  default     = ""
+}
