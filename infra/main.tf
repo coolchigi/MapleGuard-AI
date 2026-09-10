@@ -124,6 +124,13 @@ resource "aws_iam_role_policy" "monitor" {
         Effect   = "Allow"
         Action   = ["sns:Publish"]
         Resource = [aws_sns_topic.alerts[0].arn]
+      }] : [],
+      # Policy watch calls Bedrock (the classifier extracts the change, the matcher re-audits the
+      # letter), so grant model invoke only when a policy URL is set. Same resources as the API.
+      var.policy_url != "" ? [{
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = local.bedrock_invoke_resources
     }] : [])
   })
 }
@@ -146,6 +153,11 @@ resource "aws_lambda_function" "monitor" {
       },
       var.alerts_enabled ? { MAPLEGUARD_ALERT_TOPIC_ARN = aws_sns_topic.alerts[0].arn } : {},
       var.rounds_url != "" ? { MAPLEGUARD_ROUNDS_URL = var.rounds_url } : {},
+      # Opt-in policy watch: the URL turns it on, the pinned model matches the API Lambda.
+      var.policy_url != "" ? {
+        MAPLEGUARD_POLICY_URL    = var.policy_url
+        MAPLEGUARD_BEDROCK_MODEL = var.bedrock_model_id
+      } : {},
     )
   }
 }

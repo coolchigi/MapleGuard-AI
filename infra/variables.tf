@@ -39,3 +39,9 @@ variable "bedrock_model_id" {
   type        = string
   default     = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 }
+
+variable "policy_url" {
+  description = "IRCC page the monitor watches for policy changes (NOC/CRS-weight/program rules). When set, the monitor fetches it each tick, a Bedrock classifier extracts any change, and affected profiles get a re-audit alert. Empty keeps the monitor draws-only. Costs one Bedrock call per tick, so pair a stable page with a sensible schedule_expression."
+  type        = string
+  default     = ""
+}
