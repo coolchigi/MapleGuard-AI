@@ -1,5 +1,5 @@
 {
-  "_comment": "Oracle cases. expected_total is the score from IRCC's official 'Check your score' tool (canada.ca). Language fields are [speaking, listening, reading, writing] CLB.",
+  "_comment": "Oracle cases. expected_total is the score from IRCC's official 'Check your score' tool (canada.ca). Language fields are [speaking, listening, reading, writing] CLB. A case with expected_total null is a persona stub: the test SKIPS it until someone runs the profile through the official tool and pastes the number here. Never guess expected_total.",
   "cases": [
     {
       "name": "canadian-bachelor-clb10-474",
@@ -11,6 +11,47 @@
         "first_language": [12, 11, 11, 12],
         "canadian_work_years": 1,
         "canadian_post_secondary_years": 4
+      }
+    },
+    {
+      "name": "french-second-language-persona",
+      "note": "STUB, fill expected_total from canada.ca. The French-option case: single, age 30, bachelor's, strong English (CLB 9), French as a second language at NCLC 7 across all abilities. Should pick up the +50 French additional bonus. This is the persona MapleGuard exists to surface.",
+      "expected_total": null,
+      "profile": {
+        "age": 30,
+        "education": "bachelors-or-three-year",
+        "first_language": [9, 9, 9, 9],
+        "second_language": [7, 7, 7, 7],
+        "second_language_is_french": true,
+        "canadian_work_years": 1
+      }
+    },
+    {
+      "name": "married-couple-persona",
+      "note": "STUB, fill expected_total from canada.ca. Married, spouse accompanying and not a PR/citizen: age 32, master's, English CLB 9, 2 years foreign work. Spouse has a bachelor's, English CLB 7, no Canadian work. Exercises the spouse tables + spouse block + the 460 core ceiling.",
+      "expected_total": null,
+      "profile": {
+        "age": 32,
+        "education": "masters-or-professional",
+        "first_language": [9, 9, 9, 9],
+        "foreign_work_years": 2,
+        "marital_status": "married",
+        "spouse_accompanying": true,
+        "spouse_education": "bachelors-or-three-year",
+        "spouse_first_language": [7, 7, 7, 7],
+        "spouse_canadian_work_years": 0
+      }
+    },
+    {
+      "name": "skilled-trades-certificate-persona",
+      "note": "STUB, fill expected_total from canada.ca. Trades path: single, age 35, two-year post-secondary, English CLB 7, 3 years foreign work, holds a certificate of qualification. Exercises the certificate-of-qualification skill-transfer group.",
+      "expected_total": null,
+      "profile": {
+        "age": 35,
+        "education": "two-year-post-secondary",
+        "first_language": [7, 7, 7, 7],
+        "foreign_work_years": 3,
+        "has_certificate_of_qualification": true
       }
     }
   ]
