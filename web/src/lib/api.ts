@@ -242,11 +242,20 @@ async function getJson<T>(
   }
 }
 
+/** GET /profiles/{id}/alerts returns `{profile_id, alerts: [...]}`, so unwrap the array here.
+ *  (Verified against the live API: the body is an object, not a bare array.) */
 export async function fetchAlerts(
   profileId: string,
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<Alert[]> {
-  return getJson<Alert[]>(`/profiles/${encodeURIComponent(profileId)}/alerts`, options);
+  const feed = await getJson<{ profile_id: string; alerts: Alert[] }>(
+    `/profiles/${encodeURIComponent(profileId)}/alerts`,
+    options,
+  );
+  if (!feed || !Array.isArray(feed.alerts)) {
+    throw new ApiError("malformed", "the API answered, but not with an alerts feed");
+  }
+  return feed.alerts;
 }
 
 export type HealthResponse = {

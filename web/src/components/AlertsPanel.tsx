@@ -3,14 +3,18 @@
 import type { Alert } from "@/data/types";
 import { Masthead } from "./atoms";
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Format a YYYY-MM-DD string without going through `new Date()`, which parses it as UTC midnight
+ *  and then renders a day earlier in any timezone behind UTC (the "Aug 22 -> Aug 21" bug). */
+function humanDate(iso: string): string {
+  const [y, m, d] = (iso ?? "").split("-").map(Number);
+  if (!y || !m || !d) return iso ?? "";
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
 function AlertCard({ alert }: { alert: Alert }) {
-  const date = alert.as_of
-    ? new Date(alert.as_of).toLocaleDateString("en-CA", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    : alert.as_of;
+  const date = humanDate(alert.as_of);
 
   return (
     <div className="mg-alert-card">
@@ -19,16 +23,32 @@ function AlertCard({ alert }: { alert: Alert }) {
         <span className="mg-alert-date">{date}</span>
       </div>
       {alert.summary && <p className="mg-alert-summary">{alert.summary}</p>}
-      {alert.new_draws.length > 0 && (
+      {alert.impact.length > 0 && (
+        <ul className="mg-alert-draws">
+          {alert.impact.map((im, i) => (
+            <li key={i}>
+              <strong>{im.draw}</strong>
+              {im.round_number ? ` · round ${im.round_number}` : ""}
+              {im.cutoff != null ? ` — cutoff ${im.cutoff}` : ""}
+              {im.your_score != null ? `, you ${im.your_score}` : ""}
+              {im.clears ? " · clears" : im.gap != null ? ` · ${im.gap} short` : ""}
+              {!im.clears && im.closing_moves && im.closing_moves[0] ? (
+                <span className="mg-alert-move"> → closest move: {im.closing_moves[0].move} ({im.closing_moves[0].effort})</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {alert.impact.length === 0 && alert.new_draws.length > 0 && (
         <ul className="mg-alert-draws">
           {alert.new_draws.map((d, i) => (
             <li key={i}>
-              {d.name ?? "draw"}{d.score != null ? ` — cutoff ${d.score}` : ""}
+              <strong>{d.name}</strong>{d.cutoff != null ? ` — cutoff ${d.cutoff}` : ""}
               {d.date ? ` (${d.date})` : ""}
-              {d.source_url && (
+              {(d.provenance?.source_url ?? d.source) && (
                 <>
                   {" · "}
-                  <a href={d.source_url} target="_blank" rel="noopener noreferrer" className="mg-cite-link">
+                  <a href={d.provenance?.source_url ?? d.source ?? "#"} target="_blank" rel="noopener noreferrer" className="mg-cite-link">
                     source
                   </a>
                 </>
