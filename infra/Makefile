@@ -10,17 +10,23 @@
 
 TF ?= terraform
 
-.PHONY: aws-up aws-down plan fmt output init validate api-package
+.PHONY: aws-up aws-down plan fmt output init validate api-package monitor-package
 
 # Build the API Lambda package (deps as linux/x86_64 wheels + server source) into build/api_pkg/.
 # Required before apply when api_enabled=true (the default). Skipped by `make plan`/`validate`.
 api-package:
 	bash build-api.sh
 
+# Build the monitor Lambda package (typing_extensions + anthropic wheels + server source) into
+# build/monitor_pkg/. Required before apply: the monitor imports typing_extensions and, for the
+# opt-in policy watch, anthropic. Skipped by `make plan`/`validate`.
+monitor-package:
+	bash build-monitor.sh
+
 init:
 	$(TF) init
 
-aws-up: init api-package
+aws-up: init api-package monitor-package
 	$(TF) apply -auto-approve
 
 plan: init

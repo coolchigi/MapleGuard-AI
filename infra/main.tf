@@ -77,14 +77,8 @@ resource "aws_sns_topic" "alerts" {
 # handler needs only the pure core + boto3 (provided by the Lambda runtime), so no vendored deps.
 data "archive_file" "monitor" {
   type        = "zip"
-  source_dir  = "${path.module}/../server"
+  source_dir  = "${path.module}/build/monitor_pkg" # produced by `make monitor-package` (build-monitor.sh)
   output_path = "${path.module}/build/monitor_lambda.zip"
-
-  excludes = [
-    "tests", "api", "scripts", "Dockerfile", "requirements.txt",
-    "__pycache__", "agent/__pycache__", "crs/__pycache__", "pnp/__pycache__",
-    "paths/__pycache__", "noc/__pycache__", "ingest/__pycache__",
-  ]
 }
 
 # --------------------------------------------------------------------- Lambda IAM role
