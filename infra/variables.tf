@@ -40,6 +40,12 @@ variable "bedrock_model_id" {
   default     = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 }
 
+variable "knowledge_base_id" {
+  description = "Bedrock Knowledge Base id from infra/kb/provision_s3_vectors_kb.py (make kb-up). When set, the API Lambda retrieves cited NOC passages from it (MAPLEGUARD_MEMORY_BACKEND=bedrock_kb); empty leaves the Lambda on the seeded dev memory. The KB itself is provisioned by that script, not Terraform (no S3 Vectors provider support)."
+  type        = string
+  default     = ""
+}
+
 variable "policy_url" {
   description = "IRCC page the monitor watches for policy changes (NOC/CRS-weight/program rules). When set, the monitor fetches it each tick, a Bedrock classifier extracts any change, and affected profiles get a re-audit alert. Empty keeps the monitor draws-only. Costs one Bedrock call per tick, so pair a stable page with a sensible schedule_expression."
   type        = string
