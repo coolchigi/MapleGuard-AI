@@ -105,6 +105,119 @@ def test_anchor_lone_bachelor_clb9_transfer_is_25():
     assert s.total == 379
 
 
+# --- Factor coverage: one anchor per factor an immigrant actually asks about ----------
+# Each number below is computed by hand from the published grid in crs/tables.py and then
+# confirmed against the engine, so a change to any single table breaks exactly one test and
+# names the factor. These are the factors the official IRCC tool exposes but that the earlier
+# suite did not exercise: French, spouse, the skill-transfer foreign-work and certificate
+# groups, the additional-points sources and their 600 cap, and the age/CLB boundaries.
+
+def test_french_bonus_nclc7_with_english_clb9_adds_50():
+    # The "I didn't know French was an option" case. English first language CLB 9, French second
+    # language NCLC 7. French NCLC 7 + English CLB 5+ is the top additional bonus: +50.
+    # core 310 = age29 110 + bachelor 120 + Eng CLB9 (31x4=124)... wait English is CLB7 here:
+    # first_language CLB7 (17x4=68) + French second (3x4=12, under the 24 cap) = 110+120+68+12.
+    p = Profile(age=29, education="bachelors-or-three-year", first_language=L(7),
+                second_language=L(7), second_language_is_french=True)
+    s = crs(p)
+    assert s.additional == 50
+    assert any(i.factor == "french_bonus" and i.points == 50 for i in s.breakdown)
+    assert s.total == 373
+
+
+def test_french_bonus_nclc7_with_english_clb4_adds_only_25():
+    # Same French NCLC 7, but weak English (CLB 4 < 5) drops the bonus to the lower tier: +25.
+    p = Profile(age=29, education="bachelors-or-three-year", first_language=L(4),
+                second_language=L(7), second_language_is_french=True)
+    s = crs(p)
+    assert s.additional == 25
+    assert s.total == 291
+
+
+def test_french_bonus_needs_nclc7_across_all_abilities():
+    # NCLC 6 in even one ability fails the NCLC 7 gate, so no French bonus at all.
+    weak_french = LanguageScores(speaking=7, listening=7, reading=6, writing=7)
+    p = Profile(age=29, education="bachelors-or-three-year", first_language=L(9),
+                second_language=weak_french, second_language_is_french=True)
+    assert all(i.factor != "french_bonus" for i in crs(p).breakdown)
+
+
+def test_scored_spouse_uses_spouse_tables_and_spouse_block():
+    # Married, spouse accompanying and not a PR, so the spouse is scored: the core switches to the
+    # spouse tables (lower age/education/language values, ceiling 460) and the spouse block adds
+    # spouse education 8 + spouse language (3x4=12) + spouse Canadian work 5 = 25.
+    p = Profile(age=29, education="bachelors-or-three-year", first_language=L(9),
+                marital_status="married", spouse_accompanying=True,
+                spouse_education="bachelors-or-three-year", spouse_first_language=L(7),
+                spouse_canadian_work_years=1)
+    s = crs(p)
+    assert s.core == 328          # 100 age + 112 edu + 116 lang (spouse tables)
+    assert s.spouse == 25
+    assert s.total == 378
+
+
+def test_spouse_not_scored_when_a_pr_or_citizen():
+    # A spouse who is already a PR/citizen is not scored: single tables, no spouse block.
+    single = crs(Profile(age=29, education="bachelors-or-three-year", first_language=L(9)))
+    with_pr_spouse = crs(Profile(age=29, education="bachelors-or-three-year", first_language=L(9),
+                                 marital_status="married", spouse_accompanying=True,
+                                 spouse_is_pr_or_citizen=True, spouse_first_language=L(9)))
+    assert with_pr_spouse.total == single.total
+    assert with_pr_spouse.spouse == 0
+
+
+def test_skill_transfer_all_three_groups_cap_at_100():
+    # Masters + CLB 9 + 2 Canadian years + 3 foreign years + trade certificate maxes every
+    # skill-transfer group (education 50, foreign work 50, certificate 50 = 150) but the block
+    # is capped at 100.
+    p = Profile(age=29, education="masters-or-professional", first_language=L(9),
+                canadian_work_years=2, foreign_work_years=3, has_certificate_of_qualification=True)
+    assert crs(p).skill_transfer == 100
+
+
+def test_sibling_in_canada_adds_15():
+    p = Profile(age=29, education="bachelors-or-three-year", first_language=L(9),
+                has_sibling_in_canada=True)
+    s = crs(p)
+    assert s.additional == 15
+    assert any(i.factor == "sibling_in_canada" and i.points == 15 for i in s.breakdown)
+
+
+def test_canadian_study_1_2_years_is_15_and_3_plus_is_30():
+    short = crs(Profile(age=29, education="bachelors-or-three-year", first_language=L(9),
+                        canadian_post_secondary_years=2))
+    long = crs(Profile(age=29, education="bachelors-or-three-year", first_language=L(9),
+                       canadian_post_secondary_years=3))
+    assert short.additional == 15
+    assert long.additional == 30
+
+
+def test_additional_points_cap_at_600():
+    # PNP 600 + sibling 15 + Canadian study 30 + French 50 = 695, capped at 600.
+    p = Profile(age=29, education="bachelors-or-three-year", first_language=L(9),
+                has_provincial_nomination=True, has_sibling_in_canada=True,
+                canadian_post_secondary_years=4, second_language=L(7),
+                second_language_is_french=True)
+    assert crs(p).additional == 600
+
+
+def test_age_outside_the_table_scores_zero():
+    # The age grid runs 18 to 44. Age 45+ and 17- score 0 age points (not an error).
+    at_45 = crs(Profile(age=45, education="bachelors-or-three-year", first_language=L(9)))
+    assert at_45.breakdown[0].factor == "age" and at_45.breakdown[0].points == 0
+    at_18 = crs(Profile(age=18, education="bachelors-or-three-year", first_language=L(9)))
+    assert at_18.breakdown[0].points == 99
+
+
+def test_language_below_clb4_scores_zero():
+    # CLB below 4 earns no first-language points; CLB 4 is the first scoring band (6 x 4 = 24).
+    below = crs(Profile(age=29, education="bachelors-or-three-year", first_language=L(3)))
+    at_4 = crs(Profile(age=29, education="bachelors-or-three-year", first_language=L(4)))
+    lang_pts = lambda s: next(i.points for i in s.breakdown if i.factor == "first_language")
+    assert lang_pts(below) == 0
+    assert lang_pts(at_4) == 24
+
+
 # --- Tier 3: oracle / end-to-end golden cases (your 474, the ImmiPilot 444) ----------
 def _load_cases():
     if not CASES.exists():
