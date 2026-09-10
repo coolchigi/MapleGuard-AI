@@ -112,9 +112,8 @@ resource "aws_lambda_function_url" "api" {
   function_name      = aws_lambda_function.api[0].function_name
   authorization_type = "NONE" # public read/compute API; no secrets (Bedrock via the role)
 
-  cors {
-    allow_origins = ["*"]
-    allow_methods = ["GET", "POST"]
-    allow_headers = ["content-type"]
-  }
+  # No cors {} block here on purpose. The FastAPI app already sets CORS (CORSMiddleware in
+  # api/app.py), which is also what local uvicorn dev relies on. If the Function URL ALSO sets it,
+  # every response carries two Access-Control-Allow-Origin headers, and the browser rejects that as
+  # invalid CORS — surfacing in the frontend as "cannot reach the API". One source only: the app.
 }
