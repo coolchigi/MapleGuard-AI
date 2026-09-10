@@ -6,3 +6,6 @@ next-env.d.ts
 *.tsbuildinfo
 .vercel
 .DS_Store
+
+# local env (never commit)
+.env*.local

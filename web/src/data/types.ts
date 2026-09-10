@@ -231,18 +231,54 @@ export type PathwaysData = {
 };
 
 // ----------------------------------------------------------- alerts (GET /profiles/{id}/alerts)
+// Shapes verified against the real monitor payload (agent/monitor.py Alert.to_dict + _impact),
+// not guessed: new_draws carry `cutoff` (not `score`) and their source in `provenance`, and each
+// `impact` row is the deterministic standing against that draw (your_score vs cutoff, gap, moves).
+
+/** A raw cited draw the monitor saw as new. */
+export type AlertDraw = {
+  kind: string;
+  name: string;
+  cutoff: number;
+  date: string;
+  source?: string | null;
+  category?: string | null;
+  provenance?: { source_url?: string | null; round_number?: string | null; round_url?: string | null } | null;
+};
+
+/** How one new draw affects this candidate: the pathway, their standing, and the cheapest move. */
+export type AlertImpact = {
+  draw: string;
+  round_number?: string | null;
+  category?: string | null;
+  eligible: boolean | null;
+  eligibility_reason?: string;
+  your_score?: number | null;
+  cutoff?: number | null;
+  clears?: boolean | null;
+  gap?: number | null;
+  closing_moves?: ClosingMove[];
+};
+
+/** One cited notification the autonomous monitor recorded for a profile. */
 export type Alert = {
   profile_id: string;
   as_of: string;
   kind: "draw" | "deadline" | "policy" | string;
   event_id: string;
   summary: string;
-  new_draws: { name?: string; score?: number; date?: string; category?: string | null; source_url?: string | null }[];
-  impact: { pathway?: string; before?: number | null; after?: number | null; note?: string }[];
-  reachable_alternatives: { pathway?: string; gap?: number; closing_move?: string }[];
-  deadlines: { label: string; date: string; delta: number; note: string } | null;
+  new_draws: AlertDraw[];
+  impact: AlertImpact[];
+  reachable_alternatives: Record<string, unknown>[];
+  deadlines: { age_cliffs?: unknown[]; test_expiry?: string | null; test_expiry_cliff?: unknown } | null;
   citations: string[];
-  crs: { before: number; after: number } | null;
-  letter_gaps: { duty: string; status: string }[] | null;
-  policy_change: { summary: string; source_url: string } | null;
+  crs?: Record<string, unknown> | null;
+  letter_gaps?: { duty: string; status: string }[] | null;
+  policy_change?: { summary?: string; source_url?: string } | null;
+};
+
+/** The `GET /profiles/{id}/alerts` response is an object, not a bare array. */
+export type AlertsFeed = {
+  profile_id: string;
+  alerts: Alert[];
 };
