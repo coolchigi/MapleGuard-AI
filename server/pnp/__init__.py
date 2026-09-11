@@ -16,6 +16,12 @@ from .ontario import (
     OinpStanding,
     oinp_standing,
 )
+from .manitoba import (
+    MPNP_MIN_POINTS,
+    MPNP_SOURCE_URL,
+    MpnpStanding,
+    mpnp_points,
+)
 from .sirs_ingest import (
     BC_PNP_SIRS_URL,
     BandReconciliation,
@@ -44,6 +50,10 @@ __all__ = [
     "oinp_standing",
     "OinpStanding",
     "OINP_SOURCE_URL",
+    "mpnp_points",
+    "MpnpStanding",
+    "MPNP_MIN_POINTS",
+    "MPNP_SOURCE_URL",
     "BC_PNP_SIRS_URL",
     "SirsGridCitation",
     "SirsBandRecord",

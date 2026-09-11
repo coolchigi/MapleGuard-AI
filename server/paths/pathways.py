@@ -33,7 +33,7 @@ from datetime import date
 from typing import Optional
 
 from crs import Profile, crs
-from pnp import BCJobOffer, oinp_standing, sinp_points, sirs_bc
+from pnp import BCJobOffer, mpnp_points, oinp_standing, sinp_points, sirs_bc
 
 from .reach import Draw, closing_moves
 
@@ -258,7 +258,26 @@ def eligible_pathways(profile: Profile, draws: Optional[list] = None,
               "Entry pool streams were removed in the June 2026 redesign"),
     ))
 
-    # 6. Every other nominating province/territory, cited. Their streams have their own criteria we
+    # 6. Manitoba (MPNP): a computed score from the official self-assessment grid (Factors 1-4:
+    # language, age, work, education, max 75). A Manitoba connection (Factor 5) is MANDATORY and we
+    # do not collect it, so eligibility stays None regardless of the subtotal, never faked.
+    mpnp = mpnp_points(profile, as_of=day)
+    pathways.append(PathwayStanding(
+        slug="pnp-manitoba", title="Manitoba Provincial Nominee Program (MPNP)", rule_kind="pnp",
+        eligible=None,
+        eligibility_reason=(f"MPNP self-assessment Factors 1-4 (language, age, work, education) = "
+                            f"{mpnp.factors_1_4} of {mpnp.factors_1_4_max}; you need {mpnp.minimum} "
+                            "total AND a mandatory Manitoba connection (close relative, past MB "
+                            "work/study, or a recruitment invitation), which we do not assess"),
+        source_url=mpnp.source_url, source_date=mpnp.source_date.isoformat(),
+        additional_requirements=("a Manitoba connection is required of all applicants; without one "
+                                 "you are ineligible regardless of points"),
+        score_kind="MPNP points", your_score=mpnp.factors_1_4,
+        note=(f"a provincial nomination adds +{EE_NOMINATION_CRS_BONUS} CRS; Manitoba's 1000-point "
+              "Expression-of-Interest ranking is a separate draw pool with no published pass mark"),
+    ))
+
+    # 7. Every other nominating province/territory, cited. Their streams have their own criteria we
     # do not model here, so eligibility is honestly undecided (None), but the one federal fact we
     # can state deterministically is the +600 CRS an enhanced (Express Entry-aligned) nomination
     # adds. This covers the whole country instead of BC alone, without inventing a verdict.
