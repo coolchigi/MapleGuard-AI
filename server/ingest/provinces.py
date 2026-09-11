@@ -53,7 +53,8 @@ class PNP:
 # score in `pnp/bc.py`; it is flagged modelled_with_score so pathways uses that entry, not a
 # duplicate stub here.
 PNP_PROGRAMS: dict[str, PNP] = {
-    "alberta": PNP("alberta", "Alberta", "Alberta Advantage Immigration Program (AAIP)"),
+    "alberta": PNP("alberta", "Alberta", "Alberta Advantage Immigration Program (AAIP)",
+                  modelled=True),
     "british-columbia": PNP("british-columbia", "British Columbia",
                             "BC Provincial Nominee Program (BC PNP)", modelled=True),
     "manitoba": PNP("manitoba", "Manitoba", "Manitoba Provincial Nominee Program (MPNP)",
@@ -64,7 +65,8 @@ PNP_PROGRAMS: dict[str, PNP] = {
                                  "Newfoundland and Labrador Provincial Nominee Program (NLPNP)"),
     "northwest-territories": PNP("northwest-territories", "Northwest Territories",
                                  "Northwest Territories Nominee Program (NTNP)"),
-    "nova-scotia": PNP("nova-scotia", "Nova Scotia", "Nova Scotia Nominee Program (NSNP)"),
+    "nova-scotia": PNP("nova-scotia", "Nova Scotia", "Nova Scotia Nominee Program (NSNP)",
+                      modelled=True),
     "ontario": PNP("ontario", "Ontario", "Ontario Immigrant Nominee Program (OINP)", modelled=True),
     "prince-edward-island": PNP("prince-edward-island", "Prince Edward Island",
                                 "Prince Edward Island Provincial Nominee Program (PEI PNP)"),

@@ -277,6 +277,54 @@ def eligible_pathways(profile: Profile, draws: Optional[list] = None,
               "Expression-of-Interest ranking is a separate draw pool with no published pass mark"),
     ))
 
+    # 7a. Alberta (AAIP): a job-offer / Worker EOI gate model, like Ontario. AAIP's worker streams
+    # mostly require an Alberta job offer and employer requirements, and selection through the
+    # Alberta Express Entry Stream is by Alberta's own Worker Expression of Interest, so eligibility
+    # stays None rather than faking a verdict.
+    pathways.append(PathwayStanding(
+        slug="pnp-alberta", title="Alberta Advantage Immigration Program (AAIP)", rule_kind="pnp",
+        eligible=None,
+        eligibility_reason=("Alberta nominates through the AAIP. Its worker streams (Tourism and "
+                            "Hospitality, Alberta Opportunity, Alberta Express Entry, and Rural "
+                            "Renewal) mostly require an Alberta job offer and employer requirements, "
+                            "and the Alberta Express Entry Stream selects candidates from the "
+                            "federal Express Entry pool through a Worker Expression of Interest. "
+                            "Selection is set by Alberta, so eligibility is not decided here"),
+        source_url="https://www.alberta.ca/alberta-advantage-immigration-program",
+        source_date=day.isoformat(),
+        additional_requirements=("most AAIP worker streams require an Alberta job offer and "
+                                 "employer requirements; the Express Entry stream selects from the "
+                                 "federal pool by Alberta's own criteria"),
+        score_kind="none", your_score=None,
+        note=(f"a provincial nomination adds +{EE_NOMINATION_CRS_BONUS} CRS; AAIP publishes no "
+              "candidate self-score grid, selection is by an Alberta job offer or the Alberta "
+              "Express Entry Worker EOI"),
+    ))
+
+    # 7b. Nova Scotia (NSNP): a discretionary EOI-draw gate model, like Ontario. Since February 2026
+    # it runs consolidated streams selected from an Expression of Interest pool in periodic,
+    # priority-based draws, not a candidate score, so eligibility stays None rather than faking a
+    # verdict.
+    pathways.append(PathwayStanding(
+        slug="pnp-nova-scotia", title="Nova Scotia Nominee Program (NSNP)", rule_kind="pnp",
+        eligible=None,
+        eligibility_reason=("Nova Scotia nominates through the NSNP. Since February 2026 it runs "
+                            "consolidated streams (Skilled Worker, Nova Scotia Graduate, "
+                            "Entrepreneur, and Nova Scotia: Express Entry): you submit an "
+                            "Expression of Interest to a stream and Nova Scotia selects from the "
+                            "pool in periodic, priority-based draws. Selection is discretionary "
+                            "(labour-market need, occupation and sector priorities, retention), not "
+                            "a candidate score, so eligibility is not decided here"),
+        source_url="https://liveinnovascotia.com/nova-scotia-nominee-program",
+        source_date=day.isoformat(),
+        additional_requirements=("selection is by discretionary EOI draws on provincial priorities, "
+                                 "and for the Express Entry stream by a Notice of Interest in the "
+                                 "federal pool; entering the pool does not guarantee selection"),
+        score_kind="none", your_score=None,
+        note=(f"a provincial nomination adds +{EE_NOMINATION_CRS_BONUS} CRS; NSNP publishes no "
+              "candidate self-score grid, selection is by priority-based EOI draws"),
+    ))
+
     # 7. Every other nominating province/territory, cited. Their streams have their own criteria we
     # do not model here, so eligibility is honestly undecided (None), but the one federal fact we
     # can state deterministically is the +600 CRS an enhanced (Express Entry-aligned) nomination
