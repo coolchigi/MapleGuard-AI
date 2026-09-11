@@ -219,4 +219,23 @@ def eligible_pathways(profile: Profile, draws: Optional[list] = None,
               "single lever, but it is not something you can grant yourself"),
     ))
 
+    # 4. Every other nominating province/territory, cited. Their streams have their own criteria we
+    # do not model here, so eligibility is honestly undecided (None), but the one federal fact we
+    # can state deterministically is the +600 CRS an enhanced (Express Entry-aligned) nomination
+    # adds. This covers the whole country instead of BC alone, without inventing a verdict.
+    from ingest.provinces import EE_NOMINATION_CRS_BONUS, pnp_programs_without_bc
+    for pnp in pnp_programs_without_bc():
+        pathways.append(PathwayStanding(
+            slug=f"pnp-{pnp.slug}", title=pnp.program, rule_kind="pnp",
+            eligible=None,
+            eligibility_reason=(f"{pnp.province} nominates through the {pnp.program}. Its streams set "
+                                "their own criteria, so eligibility is checked on the province's "
+                                "site, not decided here"),
+            source_url=pnp.source_url, source_date=pnp.source_date.isoformat(),
+            additional_requirements="each stream has its own eligibility rules and intake",
+            score_kind="none", your_score=None,
+            note=(f"a nomination through an enhanced (Express Entry-aligned) stream adds "
+                  f"+{EE_NOMINATION_CRS_BONUS} CRS, effectively guaranteeing an invitation"),
+        ))
+
     return PathwaysMap(as_of=day.isoformat(), crs_total=crs_total, pathways=tuple(pathways))

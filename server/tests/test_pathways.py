@@ -107,3 +107,32 @@ def test_to_dict_is_json_safe_and_lists_qualifying():
     assert isinstance(d["crs_total"], int)
     assert "french" in d["qualifying"]
     assert all({"slug", "eligible", "source_url"} <= set(p) for p in d["pathways"])
+
+
+def test_every_nominating_province_is_covered_and_cited():
+    """All 11 PNP provinces/territories appear, each with a government citation. This is the
+    'no longer BC-only' guarantee. Quebec and Nunavut run no PNP, so they must be absent."""
+    m = eligible_pathways(_civil_engineer_with_french(), as_of=AS_OF)
+    pnp = [p for p in m.pathways if p.rule_kind == "pnp"]
+    assert len(pnp) == 11
+    assert all(p.source_url.startswith("http") for p in pnp)
+    slugs = {p.slug for p in pnp}
+    assert "bc-pnp" in slugs  # British Columbia, carried as the SIRS entry
+    titles = " ".join(p.title.lower() for p in pnp)
+    for province in ("ontario", "alberta", "saskatchewan", "manitoba", "nova scotia",
+                     "new brunswick", "newfoundland", "prince edward island",
+                     "northwest territories", "yukon"):
+        assert province in titles
+    assert "quebec" not in titles and "nunavut" not in titles
+
+
+def test_non_bc_provinces_are_honestly_undecided_not_faked():
+    """A province whose streams we have not modelled reports eligible=None (cannot decide), never a
+    guessed verdict, and surfaces the one deterministic federal fact: +600 CRS on an enhanced
+    nomination. BC is the exception, it carries a real SIRS verdict/score."""
+    m = eligible_pathways(_civil_engineer_with_french(), as_of=AS_OF)
+    ontario = next(p for p in m.pathways if p.slug == "pnp-ontario")
+    assert ontario.eligible is None
+    assert "600" in ontario.note
+    bc = next(p for p in m.pathways if p.slug == "bc-pnp")
+    assert bc.score_kind == "SIRS" and bc.your_score is not None
