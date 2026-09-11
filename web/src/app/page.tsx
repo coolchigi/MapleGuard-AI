@@ -14,8 +14,7 @@ import React, { useCallback, useState } from "react";
 
 import { BriefView } from "@/components/BriefView";
 import { Dashboard } from "@/components/Dashboard";
-import { PathwaysPanel } from "@/components/PathwaysPanel";
-import { ProfileForm } from "@/components/ProfileForm";
+import { ProfilePage } from "@/components/ProfilePage";
 import { TimeMachine } from "@/components/TimeMachine";
 import type { BriefLetterAudit, Profile } from "@/data/types";
 import { DEMO_DATA, useDashboard } from "@/hooks/useDashboard";
@@ -103,12 +102,14 @@ export default function Page() {
             />
           )}
           {tab === "profile" && (
-            <ProfileForm
+            <ProfilePage
               initialProfile={profile}
               onSubmit={submit}
               loading={loading || watchCase.saving}
-              submitLabel={watchCase.watched ? "RECOMPUTE & KEEP WATCHING" : "COMPUTE & WATCH MY CASE"}
               serverError={rejection}
+              watched={watchCase.watched}
+              benchmarkCutoff={positionData.lastDraw.available ? positionData.lastDraw.score : null}
+              benchmarkName={positionData.lastDraw.name ?? null}
             />
           )}
           {tab === "time" && <TimeMachine data={positionData} />}
