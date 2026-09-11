@@ -683,3 +683,32 @@ def test_orchestrator_live():
     result = agent("My CRS please. Education bachelors, all four language abilities CLB 9, "
                    "age 30, one year Canadian work.")
     assert screen_response(str(result.message)).allowed  # never asserts eligibility
+
+
+# --- 4. Deployed topology: the multi-agent advisor team, with a flat fallback ----------
+def test_deployed_topology_defaults_to_the_advisor_team(monkeypatch):
+    """The runtime deploys the multi-agent team (advisor -> strategist + document_auditor) unless
+    MAPLEGUARD_AGENT_TOPOLOGY says otherwise. Construction only, no loop run."""
+    pytest.importorskip("strands")
+    from agent.runtime import _build_request_agent
+    monkeypatch.delenv("MAPLEGUARD_AGENT_TOPOLOGY", raising=False)
+    agent = _build_request_agent(model=_fake_model([]))
+    assert agent.name == "mapleguard_advisor"
+
+
+def test_topology_flag_falls_back_to_the_flat_orchestrator(monkeypatch):
+    pytest.importorskip("strands")
+    from agent.runtime import _build_request_agent
+    monkeypatch.setenv("MAPLEGUARD_AGENT_TOPOLOGY", "flat")
+    agent = _build_request_agent(model=_fake_model([]))
+    assert agent.name != "mapleguard_advisor"
+
+
+def test_advisor_team_accepts_the_deploy_pieces(monkeypatch):
+    """build_advisor_team takes the same deploy pieces as the flat orchestrator (corpus, trace,
+    session), so the runtime wires it identically. It must build without error."""
+    pytest.importorskip("strands")
+    from agent.team import build_advisor_team
+    agent = build_advisor_team(model=_fake_model([]), corpus=None, trace_attributes={"a": "b"})
+    assert agent.name == "mapleguard_advisor"
+    assert len(agent.tool_names) == 2  # strategist + document_auditor as tools

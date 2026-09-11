@@ -18,7 +18,10 @@ import logging
 import threading
 from typing import Any, Optional
 
+import os
+
 from .orchestrator import build_orchestrator, screen_response
+from .team import build_advisor_team
 
 logger = logging.getLogger("mapleguard.runtime")
 
@@ -177,6 +180,20 @@ def _session_manager_for(session_id: Optional[str], deployment: Any) -> Optional
         return None
 
 
+def _build_request_agent(session_manager: Any = None, **pieces: Any):
+    """Build the per-request agent for the deployed topology.
+
+    Default is the multi-agent advisor team (advisor routes to a strategist and a document auditor
+    via Agent.as_tool()), which is the topology MapleGuard deploys. Set MAPLEGUARD_AGENT_TOPOLOGY=flat
+    to fall back to the single flat orchestrator. Both take the same deploy pieces and the same
+    compute-and-refuse gates, so the fallback is a drop-in if the team ever misbehaves in prod.
+    """
+    topology = os.environ.get("MAPLEGUARD_AGENT_TOPOLOGY", "team").strip().lower()
+    if topology == "flat":
+        return build_orchestrator(session_manager=session_manager, **pieces)
+    return build_advisor_team(session_manager=session_manager, **pieces)
+
+
 def build_app(model: Any = None, from_env: bool = True):
     """Wrap the entrypoint in a `BedrockAgentCoreApp` for hosting. Requires AgentCore.
 
@@ -215,7 +232,7 @@ def build_app(model: Any = None, from_env: bool = True):
         pieces = injected if injected is not None else _shared_pieces_cached()
         session_id = getattr(context, "session_id", None) or (payload or {}).get("session_id")
         session_manager = _session_manager_for(session_id, deployment)
-        agent = build_orchestrator(session_manager=session_manager, **pieces)
+        agent = _build_request_agent(session_manager=session_manager, **pieces)
         return handle(payload, agent=agent)
 
     app.invoke = invoke  # expose for direct testing of the wrapped handler
