@@ -19,8 +19,8 @@ import { ProfileForm } from "@/components/ProfileForm";
 import { SourceBar } from "@/components/SourceBar";
 import { TimeMachine } from "@/components/TimeMachine";
 import type { Profile } from "@/data/types";
-import { useDashboard } from "@/hooks/useDashboard";
-import { usePathways } from "@/hooks/usePathways";
+import { DEMO_DATA, useDashboard } from "@/hooks/useDashboard";
+import { PATHWAYS_DEMO, usePathways } from "@/hooks/usePathways";
 import { useWatchCase } from "@/hooks/useWatchCase";
 import { DEFAULT_PROFILE } from "@/lib/profile";
 
@@ -44,10 +44,9 @@ export default function Page() {
   const submit = useCallback(
     async (submitted: Profile) => {
       setProfile(submitted);
-      // Both documents describe the same candidate; compute them together so PATHWAYS is ready
-      // the moment the user switches to it, and never shows a different profile than POSITION.
-      void pathways.compute(submitted);
-      const ok = await compute(submitted);
+      // Both documents describe the same candidate. Compute them together and wait for both, so the
+      // screen advances only once each one's outcome (live vs fell-back) is known.
+      const [ok] = await Promise.all([compute(submitted), pathways.compute(submitted)]);
       if (ok) setTab("position");
     },
     [compute, pathways],
@@ -56,6 +55,25 @@ export default function Page() {
   // A rejected profile is the form's problem to show; an unreachable server is the whole app's,
   // so it stays in the source bar on every tab.
   const rejection = error && !error.isFallbackAppropriate ? error.message : null;
+
+  // Consistency guard (do not remove in the dashboard revamp): POSITION and PATHWAYS come from two
+  // independent requests, each of which falls back to its OWN demo document on failure. If only one
+  // went live we would render live numbers beside demo numbers, two different candidates on screen,
+  // which is the one thing this app must never do. So show live ONLY when BOTH are live; otherwise
+  // render both from their demo documents (built from the same profile, so they agree) and label
+  // the source bar honestly.
+  const jointlyLive = source === "live" && pathways.source === "live";
+  const jointSource = jointlyLive
+    ? "live"
+    : source === "demo" && pathways.source === "demo"
+      ? "demo"
+      : "fallback";
+  const positionData = jointlyLive ? data : DEMO_DATA;
+  const pathwaysData = jointlyLive ? pathways.data : PATHWAYS_DEMO;
+  const retry = () => {
+    void compute(profile);
+    void pathways.compute(profile);
+  };
 
   return (
     <main className="stage">
@@ -81,11 +99,11 @@ export default function Page() {
 
       <div className="mg-statusrow">
         <SourceBar
-          source={source}
+          source={jointSource}
           loading={loading}
           error={error}
-          asOfHuman={data.asOfHuman}
-          onRetry={() => void compute(profile)}
+          asOfHuman={positionData.asOfHuman}
+          onRetry={retry}
         />
       </div>
 
@@ -98,9 +116,9 @@ export default function Page() {
           serverError={rejection}
         />
       )}
-      {tab === "position" && <PositionPanel data={data} />}
-      {tab === "pathways" && <PathwaysPanel data={pathways.data} />}
-      {tab === "time" && <TimeMachine data={data} />}
+      {tab === "position" && <PositionPanel data={positionData} />}
+      {tab === "pathways" && <PathwaysPanel data={pathwaysData} />}
+      {tab === "time" && <TimeMachine data={positionData} />}
       {tab === "alerts" && (
         <AlertsPanel
           profileId={watchCase.profileId}
