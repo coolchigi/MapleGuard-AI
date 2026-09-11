@@ -29,3 +29,7 @@ typing_extensions>=4.0
 # SDK too keeps the hook/session/telemetry APIs we build against from shifting under us.
 strands-agents==1.54.0
 bedrock-agentcore==1.22.0
+
+# MCP server (mcp_app.py) hosted on AgentCore Runtime (--protocol MCP). FastMCP is mcp 1.x;
+# mcp 2.x renamed it to MCPServer, so pin <2 until we migrate.
+mcp>=1.29,<2
