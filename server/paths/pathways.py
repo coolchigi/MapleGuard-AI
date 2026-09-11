@@ -33,7 +33,7 @@ from datetime import date
 from typing import Optional
 
 from crs import Profile, crs
-from pnp import BCJobOffer, sirs_bc
+from pnp import BCJobOffer, mpnp_points, oinp_standing, sinp_points, sirs_bc
 
 from .reach import Draw, closing_moves
 
@@ -218,5 +218,81 @@ def eligible_pathways(profile: Profile, draws: Optional[list] = None,
         note=(f"a provincial nomination adds +{sirs.crs_bonus_if_nominated} CRS, the strongest "
               "single lever, but it is not something you can grant yourself"),
     ))
+
+    # 4. Saskatchewan (SINP): a real computed score from the official SINP points grid, like BC.
+    # We score Factor I (education, work, language, age); the Saskatchewan-connection points and the
+    # occupation-demand-driven draws are not modelled, so meeting the 60 floor is entry to the pool,
+    # never an invitation. `eligible` is True only when Factor I alone clears 60, else None.
+    sinp = sinp_points(profile, as_of=day)
+    pathways.append(PathwayStanding(
+        slug="pnp-saskatchewan", title="Saskatchewan Immigrant Nominee Program (SINP)",
+        rule_kind="pnp", eligible=sinp.meets_points_floor,
+        eligibility_reason=(f"SINP Factor I score {sinp.factor_one} of {sinp.factor_one_max} "
+                            f"(needs {sinp.minimum} total to submit an EOI)"
+                            + ("; clears the floor on labour-market points alone"
+                               if sinp.meets_points_floor
+                               else "; a Saskatchewan connection could still reach the floor")),
+        source_url=sinp.source_url, source_date=sinp.source_date.isoformat(),
+        additional_requirements=("Saskatchewan-connection points (family, past SK work/study, or a "
+                                 "SK job offer) are not assessed here; invitations select by "
+                                 "in-demand occupation through EOI draws"),
+        score_kind="SINP points", your_score=sinp.factor_one,
+        note=("meeting the 60-point floor enters the EOI pool, it is not an invitation; SINP draws "
+              "select on in-demand occupation and provincial need and can change at any time"),
+    ))
+
+    # 5. Ontario (OINP): rebuilt June 2026 into the single Ontario Workforce Priority Stream, which
+    # requires a permanent Ontario job offer on every pathway (self-employed physicians aside). We
+    # check the published skill floors from the profile and state the job-offer gate; eligibility
+    # stays None because it turns on a job offer we do not collect, never faked.
+    from ingest.provinces import EE_NOMINATION_CRS_BONUS, pnp_programs_eligibility_only
+    oinp = oinp_standing(profile, as_of=day)
+    pathways.append(PathwayStanding(
+        slug="pnp-ontario", title="Ontario Immigrant Nominee Program (OINP)", rule_kind="pnp",
+        eligible=None, eligibility_reason=oinp.reason,
+        source_url=oinp.source_url, source_date=oinp.source_date.isoformat(),
+        additional_requirements=("a full-time permanent Ontario job offer is required on every "
+                                 "Workforce Priority pathway (self-employed physicians excepted)"),
+        score_kind="none", your_score=None,
+        note=(f"a provincial nomination adds +{EE_NOMINATION_CRS_BONUS} CRS; OINP's former Express "
+              "Entry pool streams were removed in the June 2026 redesign"),
+    ))
+
+    # 6. Manitoba (MPNP): a computed score from the official self-assessment grid (Factors 1-4:
+    # language, age, work, education, max 75). A Manitoba connection (Factor 5) is MANDATORY and we
+    # do not collect it, so eligibility stays None regardless of the subtotal, never faked.
+    mpnp = mpnp_points(profile, as_of=day)
+    pathways.append(PathwayStanding(
+        slug="pnp-manitoba", title="Manitoba Provincial Nominee Program (MPNP)", rule_kind="pnp",
+        eligible=None,
+        eligibility_reason=(f"MPNP self-assessment Factors 1-4 (language, age, work, education) = "
+                            f"{mpnp.factors_1_4} of {mpnp.factors_1_4_max}; you need {mpnp.minimum} "
+                            "total AND a mandatory Manitoba connection (close relative, past MB "
+                            "work/study, or a recruitment invitation), which we do not assess"),
+        source_url=mpnp.source_url, source_date=mpnp.source_date.isoformat(),
+        additional_requirements=("a Manitoba connection is required of all applicants; without one "
+                                 "you are ineligible regardless of points"),
+        score_kind="MPNP points", your_score=mpnp.factors_1_4,
+        note=(f"a provincial nomination adds +{EE_NOMINATION_CRS_BONUS} CRS; Manitoba's 1000-point "
+              "Expression-of-Interest ranking is a separate draw pool with no published pass mark"),
+    ))
+
+    # 7. Every other nominating province/territory, cited. Their streams have their own criteria we
+    # do not model here, so eligibility is honestly undecided (None), but the one federal fact we
+    # can state deterministically is the +600 CRS an enhanced (Express Entry-aligned) nomination
+    # adds. This covers the whole country instead of BC alone, without inventing a verdict.
+    for pnp in pnp_programs_eligibility_only():
+        pathways.append(PathwayStanding(
+            slug=f"pnp-{pnp.slug}", title=pnp.program, rule_kind="pnp",
+            eligible=None,
+            eligibility_reason=(f"{pnp.province} nominates through the {pnp.program}. Its streams set "
+                                "their own criteria, so eligibility is checked on the province's "
+                                "site, not decided here"),
+            source_url=pnp.source_url, source_date=pnp.source_date.isoformat(),
+            additional_requirements="each stream has its own eligibility rules and intake",
+            score_kind="none", your_score=None,
+            note=(f"a nomination through an enhanced (Express Entry-aligned) stream adds "
+                  f"+{EE_NOMINATION_CRS_BONUS} CRS, effectively guaranteeing an invitation"),
+        ))
 
     return PathwaysMap(as_of=day.isoformat(), crs_total=crs_total, pathways=tuple(pathways))
