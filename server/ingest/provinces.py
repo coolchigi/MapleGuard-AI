@@ -37,13 +37,13 @@ EE_NOMINATION_CRS_BONUS = 600
 
 @dataclass(frozen=True)
 class PNP:
-    """One province/territory's nominee program, cited. `modelled_with_score` is True only where we
-    compute an actual provincial score (BC SIRS today); elsewhere the province is present and cited
-    but its stream eligibility is not decided here."""
+    """One province/territory's nominee program, cited. `modelled` is True where pathways builds a
+    dedicated, province-specific entry for it (BC SIRS score, Saskatchewan SINP score, Ontario's
+    job-offer eligibility gate); the rest are shown at the program + citation level."""
     slug: str
     province: str
     program: str
-    modelled_with_score: bool = False
+    modelled: bool = False
     source_url: str = PNP_SOURCE_URL
     source_date: date = PNP_SOURCE_DATE
     verified: bool = True
@@ -55,7 +55,7 @@ class PNP:
 PNP_PROGRAMS: dict[str, PNP] = {
     "alberta": PNP("alberta", "Alberta", "Alberta Advantage Immigration Program (AAIP)"),
     "british-columbia": PNP("british-columbia", "British Columbia",
-                            "BC Provincial Nominee Program (BC PNP)", modelled_with_score=True),
+                            "BC Provincial Nominee Program (BC PNP)", modelled=True),
     "manitoba": PNP("manitoba", "Manitoba", "Manitoba Provincial Nominee Program (MPNP)"),
     "new-brunswick": PNP("new-brunswick", "New Brunswick",
                          "New Brunswick Provincial Nominee Program (NBPNP)"),
@@ -64,11 +64,11 @@ PNP_PROGRAMS: dict[str, PNP] = {
     "northwest-territories": PNP("northwest-territories", "Northwest Territories",
                                  "Northwest Territories Nominee Program (NTNP)"),
     "nova-scotia": PNP("nova-scotia", "Nova Scotia", "Nova Scotia Nominee Program (NSNP)"),
-    "ontario": PNP("ontario", "Ontario", "Ontario Immigrant Nominee Program (OINP)"),
+    "ontario": PNP("ontario", "Ontario", "Ontario Immigrant Nominee Program (OINP)", modelled=True),
     "prince-edward-island": PNP("prince-edward-island", "Prince Edward Island",
                                 "Prince Edward Island Provincial Nominee Program (PEI PNP)"),
     "saskatchewan": PNP("saskatchewan", "Saskatchewan",
-                        "Saskatchewan Immigrant Nominee Program (SINP)", modelled_with_score=True),
+                        "Saskatchewan Immigrant Nominee Program (SINP)", modelled=True),
     "yukon": PNP("yukon", "Yukon", "Yukon Nominee Program (YNP)"),
 }
 
@@ -77,8 +77,8 @@ NO_PNP = {"quebec": "Quebec (selects through its own Arrima system)", "nunavut":
 
 
 def pnp_programs_eligibility_only() -> list[PNP]:
-    """Every PNP that pathways shows at the program + citation level, i.e. the ones NOT modelled
-    with a real provincial score (BC via SIRS and Saskatchewan via the SINP grid are, so they are
-    excluded here and added by pathways with their own scores). Sorted by province for stable order."""
-    return sorted((p for p in PNP_PROGRAMS.values() if not p.modelled_with_score),
+    """Every PNP that pathways shows at the program + citation level, i.e. the ones without a
+    dedicated province-specific entry (BC, Saskatchewan and Ontario have one, so they are excluded
+    here and added by pathways directly). Sorted by province for stable order."""
+    return sorted((p for p in PNP_PROGRAMS.values() if not p.modelled),
                   key=lambda p: p.province)

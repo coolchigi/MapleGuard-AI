@@ -33,7 +33,7 @@ from datetime import date
 from typing import Optional
 
 from crs import Profile, crs
-from pnp import BCJobOffer, sinp_points, sirs_bc
+from pnp import BCJobOffer, oinp_standing, sinp_points, sirs_bc
 
 from .reach import Draw, closing_moves
 
@@ -241,11 +241,27 @@ def eligible_pathways(profile: Profile, draws: Optional[list] = None,
               "select on in-demand occupation and provincial need and can change at any time"),
     ))
 
-    # 5. Every other nominating province/territory, cited. Their streams have their own criteria we
+    # 5. Ontario (OINP): rebuilt June 2026 into the single Ontario Workforce Priority Stream, which
+    # requires a permanent Ontario job offer on every pathway (self-employed physicians aside). We
+    # check the published skill floors from the profile and state the job-offer gate; eligibility
+    # stays None because it turns on a job offer we do not collect, never faked.
+    from ingest.provinces import EE_NOMINATION_CRS_BONUS, pnp_programs_eligibility_only
+    oinp = oinp_standing(profile, as_of=day)
+    pathways.append(PathwayStanding(
+        slug="pnp-ontario", title="Ontario Immigrant Nominee Program (OINP)", rule_kind="pnp",
+        eligible=None, eligibility_reason=oinp.reason,
+        source_url=oinp.source_url, source_date=oinp.source_date.isoformat(),
+        additional_requirements=("a full-time permanent Ontario job offer is required on every "
+                                 "Workforce Priority pathway (self-employed physicians excepted)"),
+        score_kind="none", your_score=None,
+        note=(f"a provincial nomination adds +{EE_NOMINATION_CRS_BONUS} CRS; OINP's former Express "
+              "Entry pool streams were removed in the June 2026 redesign"),
+    ))
+
+    # 6. Every other nominating province/territory, cited. Their streams have their own criteria we
     # do not model here, so eligibility is honestly undecided (None), but the one federal fact we
     # can state deterministically is the +600 CRS an enhanced (Express Entry-aligned) nomination
     # adds. This covers the whole country instead of BC alone, without inventing a verdict.
-    from ingest.provinces import EE_NOMINATION_CRS_BONUS, pnp_programs_eligibility_only
     for pnp in pnp_programs_eligibility_only():
         pathways.append(PathwayStanding(
             slug=f"pnp-{pnp.slug}", title=pnp.program, rule_kind="pnp",

@@ -11,6 +11,11 @@ from .saskatchewan import (
     SinpStanding,
     sinp_points,
 )
+from .ontario import (
+    OINP_SOURCE_URL,
+    OinpStanding,
+    oinp_standing,
+)
 from .sirs_ingest import (
     BC_PNP_SIRS_URL,
     BandReconciliation,
@@ -36,6 +41,9 @@ __all__ = [
     "SinpStanding",
     "SINP_MIN_POINTS",
     "SINP_SOURCE_URL",
+    "oinp_standing",
+    "OinpStanding",
+    "OINP_SOURCE_URL",
     "BC_PNP_SIRS_URL",
     "SirsGridCitation",
     "SirsBandRecord",
