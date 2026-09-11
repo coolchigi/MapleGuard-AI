@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MapleGuard — Express Entry position",
+  title: "MapleGuard — watches your immigration case",
   description:
-    "Your Express Entry CRS, computed from the published IRCC grids and cited to source. Computed, not adjudicated.",
+    "MapleGuard watches your Canadian immigration case and surfaces one cited alert when a real IRCC change moves your standing. Every number is computed from the published grids and cited to source. Computed, not adjudicated.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

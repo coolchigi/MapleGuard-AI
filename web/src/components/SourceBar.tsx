@@ -85,8 +85,8 @@ export function SourceBar({
     <div className="mg-sourcebar" data-tone="demo">
       <Dot />
       <span className="mg-sourcebar-text">
-        Demo profile, precomputed from the same engine. Fill in the{" "}
-        <strong>PROFILE</strong> tab to compute your own.
+        Demo profile, precomputed from the same engine. Start a watch on the{" "}
+        <strong>MONITOR</strong> tab to compute your own.
       </span>
     </div>
   );

@@ -1,14 +1,19 @@
 "use client";
 
 /**
- * The dashboard shell: PROFILE collects the inputs; POSITION and TIME MACHINE render the
- * `/dashboard` document the Python engine returned; PATHWAYS renders the `/pathways` document
- * (what the candidate qualifies for). One submit computes both, for the same profile, so the tabs
- * can never disagree about who is on screen.
+ * The shell, reframed around the monitor. MapleGuard is an agent that watches a case, so the
+ * MONITOR view is the front door: it carries the intake when nobody is watching yet, and becomes
+ * the cited alert feed once a case is under watch. POSITION / PATHWAYS / TIME MACHINE are the
+ * breakdown behind the standing — one click away, never the first thing.
  *
- * On a successful compute the view moves to POSITION: the user asked a question by submitting, and
- * the answer is on another tab, so leaving them on the form would hide the result. A failure keeps
- * them on the form, where the reason is.
+ * Starting a watch is one action. Submitting the intake computes the position AND saves the
+ * profile into the monitored set, so "see my numbers" and "watch my case" are the same gesture.
+ * The compute has to land live for the watch to save (the monitor needs the real server), so a
+ * failed or offline compute keeps the intake on screen with the reason.
+ *
+ * The POSITION/PATHWAYS consistency guard is unchanged and load-bearing: the two views come from
+ * two independent requests, and we render live numbers only when BOTH went live, else both from
+ * their own demo documents. Never live numbers beside demo numbers, two candidates on one screen.
  */
 import React, { useCallback, useState } from "react";
 
@@ -24,44 +29,49 @@ import { PATHWAYS_DEMO, usePathways } from "@/hooks/usePathways";
 import { useWatchCase } from "@/hooks/useWatchCase";
 import { DEFAULT_PROFILE } from "@/lib/profile";
 
-type Tab = "profile" | "position" | "pathways" | "time" | "alerts";
+type Tab = "monitor" | "position" | "pathways" | "time";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "profile", label: "PROFILE" },
+// The monitor leads; the other three are the breakdown behind the standing.
+const BREAKDOWN_TABS: { id: Tab; label: string }[] = [
   { id: "position", label: "POSITION" },
   { id: "pathways", label: "PATHWAYS" },
   { id: "time", label: "TIME MACHINE" },
-  { id: "alerts", label: "ALERTS" },
 ];
 
 export default function Page() {
-  const [tab, setTab] = useState<Tab>("profile");
+  const [tab, setTab] = useState<Tab>("monitor");
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  // On the monitor tab, a watching user sees the feed; this flips them back to the intake to amend
+  // the profile they are watching (a re-save under the same id).
+  const [editing, setEditing] = useState(false);
   const { data, source, loading, error, compute, reset, computedFor } = useDashboard();
   const pathways = usePathways();
   const watchCase = useWatchCase();
 
-  const submit = useCallback(
+  // The intake is one action: compute the position and, when that lands live, save the profile to
+  // the monitor. The watch can only persist off a live compute (it hits the API), so an offline or
+  // rejected compute leaves the user on the intake with the reason, not silently unwatched.
+  const startWatching = useCallback(
     async (submitted: Profile) => {
       setProfile(submitted);
-      // Both documents describe the same candidate. Compute them together and wait for both, so the
-      // screen advances only once each one's outcome (live vs fell-back) is known.
       const [ok] = await Promise.all([compute(submitted), pathways.compute(submitted)]);
-      if (ok) setTab("position");
+      if (ok) {
+        await watchCase.watch(submitted);
+        setEditing(false);
+      }
     },
-    [compute, pathways],
+    [compute, pathways, watchCase],
   );
 
-  // A rejected profile is the form's problem to show; an unreachable server is the whole app's,
+  // A rejected profile is the intake's problem to show; an unreachable server is the whole app's,
   // so it stays in the source bar on every tab.
   const rejection = error && !error.isFallbackAppropriate ? error.message : null;
 
-  // Consistency guard (do not remove in the dashboard revamp): POSITION and PATHWAYS come from two
-  // independent requests, each of which falls back to its OWN demo document on failure. If only one
-  // went live we would render live numbers beside demo numbers, two different candidates on screen,
-  // which is the one thing this app must never do. So show live ONLY when BOTH are live; otherwise
-  // render both from their demo documents (built from the same profile, so they agree) and label
-  // the source bar honestly.
+  // Consistency guard (do not remove): POSITION and PATHWAYS come from two independent requests,
+  // each of which falls back to its OWN demo document on failure. If only one went live we would
+  // render live numbers beside demo numbers, two different candidates on screen. So show live ONLY
+  // when BOTH are live; otherwise render both from their demo documents (same profile, so they
+  // agree) and label the source bar honestly.
   const jointlyLive = source === "live" && pathways.source === "live";
   const jointSource = jointlyLive
     ? "live"
@@ -75,6 +85,17 @@ export default function Page() {
     void pathways.compute(profile);
   };
 
+  // The monitor home shows the feed once a case is watched; otherwise (or while amending) it shows
+  // the intake. A live compute is what lets the watch save, so surface why one did not.
+  const showFeed = watchCase.watched && !editing;
+  const intakeNotice = watchCase.saveError
+    ? `Could not start the watch: ${watchCase.saveError}`
+    : rejection
+      ? null // the form renders the rejection itself
+      : !jointlyLive && computedFor === null && (source === "fallback" || pathways.source === "fallback")
+        ? "The monitor needs the live server. Your numbers below are the bundled demo profile until it is reachable."
+        : null;
+
   return (
     <main className="stage">
       <nav className="tabs">
@@ -84,7 +105,16 @@ export default function Page() {
           </svg>
           MAPLEGUARD
         </span>
-        {TABS.map((t) => (
+        <button
+          className="tab"
+          data-active={tab === "monitor"}
+          onClick={() => setTab("monitor")}
+          aria-current={tab === "monitor" ? "page" : undefined}
+        >
+          MONITOR
+        </button>
+        <span className="tab-sep" aria-hidden>breakdown</span>
+        {BREAKDOWN_TABS.map((t) => (
           <button
             key={t.id}
             className="tab"
@@ -107,32 +137,34 @@ export default function Page() {
         />
       </div>
 
-      {tab === "profile" && (
-        <ProfileForm
-          initialProfile={profile}
-          onSubmit={submit}
-          onReset={reset}
-          loading={loading}
-          serverError={rejection}
-        />
-      )}
+      {tab === "monitor" &&
+        (showFeed ? (
+          <AlertsPanel
+            profileId={watchCase.profileId}
+            position={positionData}
+            alerts={watchCase.alerts}
+            alertsLoading={watchCase.alertsLoading}
+            alertsError={watchCase.alertsError}
+            onRefresh={() => void watchCase.refreshAlerts()}
+            onEdit={() => setEditing(true)}
+          />
+        ) : (
+          <ProfileForm
+            initialProfile={profile}
+            onSubmit={startWatching}
+            onReset={watchCase.watched ? () => setEditing(false) : reset}
+            loading={loading || watchCase.saving}
+            submitLabel={watchCase.watched ? "UPDATE & KEEP WATCHING" : "START WATCHING MY CASE"}
+            masthead="Autonomous monitor"
+            title="Watch my case."
+            lede="MapleGuard watches your Canadian immigration case and surfaces one cited alert when a real IRCC change moves your standing. Tell it who you are once. It computes your position and starts watching in the same step."
+            serverError={rejection}
+            status={intakeNotice ? <span className="mg-form-notice">{intakeNotice}</span> : undefined}
+          />
+        ))}
       {tab === "position" && <PositionPanel data={positionData} />}
       {tab === "pathways" && <PathwaysPanel data={pathwaysData} />}
       {tab === "time" && <TimeMachine data={positionData} />}
-      {tab === "alerts" && (
-        <AlertsPanel
-          profileId={watchCase.profileId}
-          watched={watchCase.watched}
-          saving={watchCase.saving}
-          saveError={watchCase.saveError}
-          alerts={watchCase.alerts}
-          alertsLoading={watchCase.alertsLoading}
-          alertsError={watchCase.alertsError}
-          onWatch={() => void watchCase.watch(profile)}
-          onRefresh={() => void watchCase.refreshAlerts()}
-          canWatch={computedFor !== null}
-        />
-      )}
     </main>
   );
 }

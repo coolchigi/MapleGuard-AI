@@ -557,3 +557,28 @@ a:hover { color: var(--maple-dark); }
 .mg-alert-citations { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
 .mg-cite-link { font-family: var(--mono); font-size: 10px; letter-spacing: 0.03em; color: var(--muted-2); word-break: break-all; }
 .mg-cite-link:hover { color: var(--maple); }
+
+/* nav separator: sets the breakdown tabs apart from the monitor without a second tab row */
+.tab-sep {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted-3); padding: 0 4px 0 10px; border-left: 1px solid var(--hair);
+  align-self: center;
+}
+@media (max-width: 640px) { .tab-sep { display: none; } }
+
+/* monitor home: the standing MapleGuard is watching, led by the CRS it computed */
+.mg-monitor-standing {
+  display: flex; align-items: center; gap: 20px;
+  margin: 4px 0 18px; padding: 18px 20px;
+  border: 1px solid var(--hair); border-radius: 8px; background: var(--panel);
+}
+.mg-monitor-standing-num { display: flex; align-items: baseline; gap: 6px; }
+.mg-monitor-standing-crs { font-family: var(--sans); font-size: 46px; font-weight: 800; line-height: 1; color: var(--ink); }
+.mg-monitor-standing-unit { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.14em; color: var(--muted-2); }
+.mg-monitor-standing-body { display: flex; flex-direction: column; gap: 5px; }
+.mg-monitor-standing-line { font-family: var(--serif); font-size: 17px; line-height: 1.35; margin: 0; color: var(--ink); }
+.mg-monitor-explainer { margin: 0 0 20px; }
+@media (max-width: 640px) { .mg-monitor-standing { flex-direction: column; align-items: flex-start; gap: 10px; } }
+
+/* intake notice: an honest line under the header when a watch could not start */
+.mg-form-notice { font-family: var(--serif); font-size: 15px; color: var(--maple-dark); }

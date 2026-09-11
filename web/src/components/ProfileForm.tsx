@@ -54,6 +54,11 @@ export function ProfileForm({
   onReset,
   loading = false,
   submitLabel = "COMPUTE MY POSITION",
+  /** Masthead label, form title, and lede. Default to the standalone-dashboard copy; the monitor
+   *  intake overrides them so the same form reads as "start watching" instead of "compute". */
+  masthead = "Candidate particulars",
+  title = "Your profile, as the grid reads it.",
+  lede = "Every field below is an input to the published IRCC grids — nothing here is scored in the browser. Submit and the Python engine returns the breakdown and the dated cliffs.",
   /** A server-side rejection (422 detail), shown above the submit button. */
   serverError,
   /** Free-form status line under the header, e.g. which document is currently on screen. */
@@ -64,6 +69,9 @@ export function ProfileForm({
   onReset?: () => void;
   loading?: boolean;
   submitLabel?: string;
+  masthead?: string;
+  title?: React.ReactNode;
+  lede?: React.ReactNode;
   serverError?: string | null;
   status?: React.ReactNode;
 }) {
@@ -112,16 +120,11 @@ export function ProfileForm({
   return (
     <div className="sheet">
       <div className="sheet-inner">
-        <Masthead label="Candidate particulars" />
+        <Masthead label={masthead} />
 
         <div className="mg-form-head">
-          <h1 className="mg-form-title">
-            Your profile, as the grid reads it.
-          </h1>
-          <p className="mg-form-lede">
-            Every field below is an input to the published IRCC grids — nothing here is scored in
-            the browser. Submit and the Python engine returns the breakdown and the dated cliffs.
-          </p>
+          <h1 className="mg-form-title">{title}</h1>
+          <p className="mg-form-lede">{lede}</p>
           {status && <div className="mg-form-status">{status}</div>}
         </div>
 

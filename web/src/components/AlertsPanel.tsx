@@ -1,7 +1,7 @@
 "use client";
 
-import type { Alert } from "@/data/types";
-import { Masthead } from "./atoms";
+import type { Alert, DashboardData } from "@/data/types";
+import { Cite, Masthead } from "./atoms";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -70,91 +70,93 @@ function AlertCard({ alert }: { alert: Alert }) {
   );
 }
 
+/** The one-line cited standing MapleGuard is watching: the CRS it computed, and where that sits
+ *  against the latest benchmarked draw. Every number here is the engine's; nothing is derived in
+ *  the browser. Rendered null-safe — an unavailable benchmark shows the score alone, never a
+ *  guessed gap. */
+function StandingStrip({ position }: { position: DashboardData }) {
+  const total = position.position.total;
+  const draw = position.lastDraw;
+  const standing = draw.available && draw.delta != null
+    ? draw.delta >= 0
+      ? `clears the latest ${draw.name ?? "draw"} by ${draw.delta}`
+      : `${Math.abs(draw.delta)} short of the latest ${draw.name ?? "draw"}`
+    : null;
+  return (
+    <div className="mg-monitor-standing">
+      <div className="mg-monitor-standing-num">
+        <span className="mg-monitor-standing-crs tabnum">{total}</span>
+        <span className="mg-monitor-standing-unit">CRS</span>
+      </div>
+      <div className="mg-monitor-standing-body">
+        {standing ? (
+          <p className="mg-monitor-standing-line">You {standing}.</p>
+        ) : (
+          <p className="mg-monitor-standing-line">
+            No live draw to benchmark against right now.
+          </p>
+        )}
+        <Cite>{draw.cite || `computed as of ${position.asOfHuman}`}</Cite>
+      </div>
+    </div>
+  );
+}
+
 export function AlertsPanel({
   profileId,
-  watched,
-  saving,
-  saveError,
+  position,
   alerts,
   alertsLoading,
   alertsError,
-  onWatch,
   onRefresh,
-  canWatch,
+  onEdit,
 }: {
   profileId: string | null;
-  watched: boolean;
-  saving: boolean;
-  saveError: string | null;
+  /** The candidate's computed position, so the monitor home leads with the standing it watches. */
+  position: DashboardData;
   alerts: Alert[];
   alertsLoading: boolean;
   alertsError: string | null;
-  onWatch: () => void;
   onRefresh: () => void;
-  canWatch: boolean;
+  onEdit: () => void;
 }) {
   return (
     <div className="sheet">
       <div className="sheet-inner">
         <Masthead label="Autonomous monitor" />
 
-        <div className="mg-form-head">
-          <h1 className="mg-form-title">Watch my case.</h1>
-          <p className="mg-form-lede">
-            The monitor checks IRCC draws every 6 hours. When a new draw moves your position,
-            you get a cited alert. No email leaves until you configure a destination.
-          </p>
+        <div className="mg-watch-active">
+          <span className="mg-watch-badge">● MONITORING ACTIVE</span>
+          <span className="mg-watch-id">profile {profileId}</span>
+          <button className="mg-secondary" onClick={onEdit}>
+            UPDATE PROFILE
+          </button>
+          <button className="mg-secondary" onClick={onRefresh} disabled={alertsLoading}>
+            {alertsLoading ? "CHECKING…" : "REFRESH"}
+          </button>
         </div>
 
-        {!watched ? (
-          <div className="mg-watch-cta">
-            {!canWatch && (
-              <p className="mg-watch-hint">
-                Compute your position first, then save your profile to the monitor.
-              </p>
-            )}
-            {saveError && (
-              <div className="mg-server-error" role="alert">
-                <strong>Could not save profile.</strong> {saveError}
-              </div>
-            )}
-            <div className="mg-actions">
-              <button
-                className="mg-submit"
-                onClick={onWatch}
-                disabled={saving || !canWatch}
-              >
-                {saving ? "SAVING…" : "WATCH MY CASE"}
-              </button>
-            </div>
-          </div>
+        <StandingStrip position={position} />
+
+        <p className="mg-form-lede mg-monitor-explainer">
+          MapleGuard checks the IRCC rounds feed every 6 hours. It surfaces here only when a new
+          draw or a rule change actually moves this position. No email leaves until you configure a
+          destination.
+        </p>
+
+        {alertsError && <div className="mg-server-error" role="alert">{alertsError}</div>}
+
+        {!alertsLoading && alerts.length === 0 ? (
+          <p className="mg-watch-empty">
+            Nothing needs your attention yet. The monitor runs every 6 hours — the next cited alert
+            lands here after a draw round moves your standing.
+          </p>
         ) : (
-          <>
-            <div className="mg-watch-active">
-              <span className="mg-watch-badge">MONITORING ACTIVE</span>
-              <span className="mg-watch-id">profile {profileId}</span>
-              <button className="mg-secondary" onClick={onRefresh} disabled={alertsLoading}>
-                {alertsLoading ? "CHECKING…" : "REFRESH"}
-              </button>
-            </div>
-
-            {alertsError && (
-              <div className="mg-server-error" role="alert">{alertsError}</div>
-            )}
-
-            {!alertsLoading && alerts.length === 0 ? (
-              <p className="mg-watch-empty">
-                No alerts yet. The monitor runs every 6 hours — check back after the next IRCC
-                draw round.
-              </p>
-            ) : (
-              <div className="mg-alerts-feed">
-                {alerts.map((a, i) => (
-                  <AlertCard key={a.event_id || i} alert={a} />
-                ))}
-              </div>
-            )}
-          </>
+          <div className="mg-alerts-feed">
+            {alerts.map((a, i) => (
+              <AlertCard key={a.event_id || i} alert={a} />
+            ))}
+          </div>
         )}
       </div>
     </div>
