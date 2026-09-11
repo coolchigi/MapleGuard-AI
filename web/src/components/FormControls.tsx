@@ -132,6 +132,37 @@ export function DateField({
   );
 }
 
+export function TextField({
+  label,
+  hint,
+  error,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const id = useId();
+  return (
+    <FieldShell label={label} hint={hint} error={error} htmlFor={id}>
+      <input
+        id={id}
+        type="text"
+        className="mg-input"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+      />
+    </FieldShell>
+  );
+}
+
 export function ToggleField({
   label,
   hint,

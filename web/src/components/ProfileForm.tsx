@@ -17,13 +17,14 @@
  */
 import React, { useMemo, useState } from "react";
 
-import type { EducationLevel, LanguageScores, Profile } from "@/data/types";
+import type { EducationLevel, LanguageScores, Profile, Province } from "@/data/types";
 import {
   CLB_LEVELS,
   DEFAULT_PROFILE,
   EDUCATION_OPTIONS,
   LANGUAGE_ABILITIES,
   MARITAL_OPTIONS,
+  PROVINCE_OPTIONS,
   STUDY_YEAR_OPTIONS,
   WORK_YEAR_OPTIONS,
   ageOn,
@@ -34,7 +35,7 @@ import {
   type ProfileErrors,
 } from "@/lib/profile";
 import { Cite, Masthead } from "./atoms";
-import { DateField, Fieldset, LanguageGrid, SelectField, ToggleField } from "./FormControls";
+import { DateField, Fieldset, LanguageGrid, SelectField, TextField, ToggleField } from "./FormControls";
 
 const YEAR_OPTIONS = WORK_YEAR_OPTIONS.map((n) => ({
   value: n,
@@ -127,7 +128,14 @@ export function ProfileForm({
 
         <form onSubmit={submit} noValidate>
           {/* ---------------------------------------------------------- A · identity */}
-          <Fieldset code="A" title="AGE & EDUCATION">
+          <Fieldset code="A" title="LOCATION, AGE & EDUCATION">
+            <SelectField<Province>
+              label="Province you are settling in"
+              hint="decides which provincial nominee program is yours to see"
+              value={profile.province}
+              options={PROVINCE_OPTIONS}
+              onChange={(v) => set("province", v)}
+            />
             <DateField
               label="Date of birth"
               hint={age !== null ? `age ${age} today` : "YYYY-MM-DD"}
@@ -221,6 +229,13 @@ export function ProfileForm({
               value={profile.foreign_work_years}
               options={YEAR_OPTIONS}
               onChange={(v) => set("foreign_work_years", v)}
+            />
+            <TextField
+              label="NOC 2021 code"
+              hint="your occupation's five-digit code — unlocks category-based draw checks"
+              value={profile.noc_code ?? ""}
+              placeholder="e.g. 21231"
+              onChange={(v) => set("noc_code", v || null)}
             />
             <ToggleField
               label="Certificate of qualification in a trade"
