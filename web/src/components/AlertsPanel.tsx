@@ -110,6 +110,7 @@ export function AlertsPanel({
   alertsError,
   onRefresh,
   onEdit,
+  onPrepareBrief,
 }: {
   profileId: string | null;
   /** The candidate's computed position, so the monitor home leads with the standing it watches. */
@@ -119,6 +120,7 @@ export function AlertsPanel({
   alertsError: string | null;
   onRefresh: () => void;
   onEdit: () => void;
+  onPrepareBrief: () => void;
 }) {
   return (
     <div className="sheet">
@@ -137,6 +139,15 @@ export function AlertsPanel({
         </div>
 
         <StandingStrip position={position} />
+
+        <div className="mg-actions mg-monitor-brief-cta">
+          <button className="mg-submit" onClick={onPrepareBrief}>
+            PREPARE CONSULTANT BRIEF
+          </button>
+          <span className="mg-actions-note">
+            <Cite>a cited PDF for your consultant · corrected letter included</Cite>
+          </span>
+        </div>
 
         <p className="mg-form-lede mg-monitor-explainer">
           MapleGuard checks the IRCC rounds feed every 6 hours. It surfaces here only when a new

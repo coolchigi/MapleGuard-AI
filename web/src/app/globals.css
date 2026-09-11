@@ -582,3 +582,53 @@ a:hover { color: var(--maple-dark); }
 
 /* intake notice: an honest line under the header when a watch could not start */
 .mg-form-notice { font-family: var(--serif); font-size: 15px; color: var(--maple-dark); }
+
+.mg-monitor-brief-cta { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--hair); }
+
+/* consultant brief: controls (screen-only) + the printable document */
+.brief-input-label {
+  display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+  color: var(--muted); margin: 16px 0 6px;
+}
+.brief-noc { max-width: 220px; }
+.brief-letter-input { width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.5; resize: vertical; }
+
+.brief-doc { margin-top: 30px; font-family: var(--serif); color: var(--ink); }
+.brief-head { border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 20px; }
+.brief-brand { font-family: var(--sans); font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--maple); }
+.brief-title { font-family: var(--serif); font-size: 34px; font-weight: 500; margin: 6px 0 8px; letter-spacing: -0.01em; }
+.brief-dateline { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0; }
+.brief-section { margin: 22px 0; }
+.brief-h2 { font-family: var(--sans); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--maple); border-bottom: 1px solid var(--hair); padding-bottom: 6px; margin: 0 0 12px; }
+.brief-h3 { font-family: var(--sans); font-size: 13px; font-weight: 700; margin: 14px 0 8px; color: var(--ink); }
+.brief-p { font-size: 16px; line-height: 1.5; margin: 0 0 10px; color: var(--ink); }
+.brief-flag { font-size: 14px; line-height: 1.45; color: var(--maple-dark); background: var(--wash); border-left: 3px solid var(--maple); padding: 10px 14px; margin: 0 0 12px; }
+.brief-dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.brief-dl-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--hair); }
+.brief-dl-row dt { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.brief-dl-row dd { margin: 0; font-size: 15px; font-weight: 500; }
+.brief-dl-total dt, .brief-dl-total dd { color: var(--maple); font-weight: 700; }
+.brief-table { width: 100%; border-collapse: collapse; }
+.brief-table th { text-align: left; font-family: var(--serif); font-weight: 400; font-size: 15px; padding: 7px 0; border-bottom: 1px solid var(--hair); }
+.brief-table td { text-align: right; font-variant-numeric: tabular-nums; font-size: 15px; padding: 7px 0; border-bottom: 1px solid var(--hair); }
+.brief-table-total th, .brief-table-total td { font-weight: 700; color: var(--maple); border-bottom: 2px solid var(--ink); }
+.brief-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.brief-list li { font-size: 15px; line-height: 1.45; }
+.brief-move { color: var(--ink-body); }
+.brief-src a { font-family: var(--mono); font-size: 11px; color: var(--muted-2); }
+.brief-letter { font-family: var(--mono); font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; padding: 18px 20px; margin: 0; }
+.brief-foot { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--hair); font-size: 13px; line-height: 1.5; color: var(--muted); }
+@media (max-width: 640px) { .brief-dl { grid-template-columns: 1fr; } }
+
+/* print: strip the app chrome and the brief's own controls, leave just the document */
+@media print {
+  body { background: #fff; }
+  .tabs, .mg-statusrow, .brief-controls { display: none !important; }
+  .stage { padding: 0; gap: 0; }
+  .sheet, .brief-sheet { box-shadow: none; width: 100%; }
+  .sheet-inner { padding: 0; }
+  .brief-doc { margin-top: 0; }
+  .brief-section { break-inside: avoid; }
+  .brief-letter { break-inside: avoid; }
+  a { color: var(--ink); }
+}

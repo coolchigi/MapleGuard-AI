@@ -282,3 +282,92 @@ export type AlertsFeed = {
   profile_id: string;
   alerts: Alert[];
 };
+
+// ----------------------------------------------------------- consultant brief (POST /brief)
+// Every number and citation below is a deterministic-core result copied unchanged into the brief
+// (see server/api/brief.py::assemble_brief). Only `prose` is model-written, and it is screened for
+// an eligibility verdict before inclusion — so it is a plain string, possibly empty.
+
+/** One cited draw from `GET /draws`, ready to rank next moves against. */
+export type DrawRecord = {
+  kind: string;
+  name: string;
+  cutoff: number;
+  date: string;
+  source?: string | null;
+  category?: string | null;
+  round_number?: string | null;
+  invitations?: number | null;
+  provenance?: Record<string, unknown> | null;
+};
+
+/** The `GET /draws` response: usable cited draws plus records refused for a manual check. */
+export type DrawsFeed = {
+  draws: DrawRecord[];
+  needs_manual_check: Record<string, unknown>[];
+};
+
+/** A dated cliff in the brief's deadlines block (serde `_cliff_to_dict`). */
+export type BriefCliff = { date: string; kind: string; label: string; delta: number };
+
+/** One ranked next move with its date, the candidate's standing, and the cheapest levers. */
+export type BriefMove = {
+  draw: string | null;
+  date: string | null;
+  kind: string | null;
+  cutoff: number | null;
+  your_score: number | null;
+  clears: boolean | null;
+  gap: number | null;
+  closing_moves: ClosingMove[];
+  source: string | null;
+  bucket: string;
+};
+
+/** The reference-letter audit block (server `AuditReport.to_dict`). */
+export type BriefLetterAudit = {
+  noc_code: string;
+  needs_verification: boolean;
+  verification_note: string;
+  elements: { name: string; status: string; evidence: string }[];
+  duties: {
+    lead_statement_covered: boolean;
+    coverage: number;
+    threshold: number;
+    passed: boolean;
+    covered: number;
+    required: number;
+    gaps: { noc_code: string; version: string; source: string; text: string }[];
+  };
+};
+
+/** The corrected-letter draft (server `draft_corrected_letter`). */
+export type BriefCorrection = {
+  letter_text: string;
+  placeholders: string[];
+  has_open_gaps: boolean;
+};
+
+/** The `POST /brief` response: the consultant brief, every number/citation from the core. */
+export type BriefData = {
+  as_of: string | null;
+  profile_summary: Record<string, unknown> & { crs_total?: number };
+  crs: {
+    total: number;
+    core: number;
+    spouse: number;
+    skill_transfer: number;
+    additional: number;
+    breakdown: { factor: string; points: number }[];
+  };
+  deadlines: {
+    age_cliffs: BriefCliff[];
+    test_expiry: string | null;
+    test_expiry_cliff: BriefCliff | null;
+  } | null;
+  next_moves: BriefMove[];
+  letter_audit: BriefLetterAudit | null;
+  correction_draft: BriefCorrection | null;
+  prose: string;
+  disclaimer: string;
+};

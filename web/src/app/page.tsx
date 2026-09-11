@@ -18,6 +18,7 @@
 import React, { useCallback, useState } from "react";
 
 import { AlertsPanel } from "@/components/AlertsPanel";
+import { BriefView } from "@/components/BriefView";
 import { PathwaysPanel } from "@/components/PathwaysPanel";
 import { PositionPanel } from "@/components/PositionPanel";
 import { ProfileForm } from "@/components/ProfileForm";
@@ -44,6 +45,9 @@ export default function Page() {
   // On the monitor tab, a watching user sees the feed; this flips them back to the intake to amend
   // the profile they are watching (a re-save under the same id).
   const [editing, setEditing] = useState(false);
+  // The consultant-brief deliverable is a full-page view (its own print stylesheet), so it replaces
+  // the shell when open rather than living inside a tab.
+  const [briefOpen, setBriefOpen] = useState(false);
   const { data, source, loading, error, compute, reset, computedFor } = useDashboard();
   const pathways = usePathways();
   const watchCase = useWatchCase();
@@ -137,34 +141,41 @@ export default function Page() {
         />
       </div>
 
-      {tab === "monitor" &&
-        (showFeed ? (
-          <AlertsPanel
-            profileId={watchCase.profileId}
-            position={positionData}
-            alerts={watchCase.alerts}
-            alertsLoading={watchCase.alertsLoading}
-            alertsError={watchCase.alertsError}
-            onRefresh={() => void watchCase.refreshAlerts()}
-            onEdit={() => setEditing(true)}
-          />
-        ) : (
-          <ProfileForm
-            initialProfile={profile}
-            onSubmit={startWatching}
-            onReset={watchCase.watched ? () => setEditing(false) : reset}
-            loading={loading || watchCase.saving}
-            submitLabel={watchCase.watched ? "UPDATE & KEEP WATCHING" : "START WATCHING MY CASE"}
-            masthead="Autonomous monitor"
-            title="Watch my case."
-            lede="MapleGuard watches your Canadian immigration case and surfaces one cited alert when a real IRCC change moves your standing. Tell it who you are once. It computes your position and starts watching in the same step."
-            serverError={rejection}
-            status={intakeNotice ? <span className="mg-form-notice">{intakeNotice}</span> : undefined}
-          />
-        ))}
-      {tab === "position" && <PositionPanel data={positionData} />}
-      {tab === "pathways" && <PathwaysPanel data={pathwaysData} />}
-      {tab === "time" && <TimeMachine data={positionData} />}
+      {briefOpen ? (
+        <BriefView profile={profile} onClose={() => setBriefOpen(false)} />
+      ) : (
+        <>
+          {tab === "monitor" &&
+            (showFeed ? (
+              <AlertsPanel
+                profileId={watchCase.profileId}
+                position={positionData}
+                alerts={watchCase.alerts}
+                alertsLoading={watchCase.alertsLoading}
+                alertsError={watchCase.alertsError}
+                onRefresh={() => void watchCase.refreshAlerts()}
+                onEdit={() => setEditing(true)}
+                onPrepareBrief={() => setBriefOpen(true)}
+              />
+            ) : (
+              <ProfileForm
+                initialProfile={profile}
+                onSubmit={startWatching}
+                onReset={watchCase.watched ? () => setEditing(false) : reset}
+                loading={loading || watchCase.saving}
+                submitLabel={watchCase.watched ? "UPDATE & KEEP WATCHING" : "START WATCHING MY CASE"}
+                masthead="Autonomous monitor"
+                title="Watch my case."
+                lede="MapleGuard watches your Canadian immigration case and surfaces one cited alert when a real IRCC change moves your standing. Tell it who you are once. It computes your position and starts watching in the same step."
+                serverError={rejection}
+                status={intakeNotice ? <span className="mg-form-notice">{intakeNotice}</span> : undefined}
+              />
+            ))}
+          {tab === "position" && <PositionPanel data={positionData} />}
+          {tab === "pathways" && <PathwaysPanel data={pathwaysData} />}
+          {tab === "time" && <TimeMachine data={positionData} />}
+        </>
+      )}
     </main>
   );
 }
