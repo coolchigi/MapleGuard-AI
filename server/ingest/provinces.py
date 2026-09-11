@@ -68,7 +68,7 @@ PNP_PROGRAMS: dict[str, PNP] = {
     "prince-edward-island": PNP("prince-edward-island", "Prince Edward Island",
                                 "Prince Edward Island Provincial Nominee Program (PEI PNP)"),
     "saskatchewan": PNP("saskatchewan", "Saskatchewan",
-                        "Saskatchewan Immigrant Nominee Program (SINP)"),
+                        "Saskatchewan Immigrant Nominee Program (SINP)", modelled_with_score=True),
     "yukon": PNP("yukon", "Yukon", "Yukon Nominee Program (YNP)"),
 }
 
@@ -76,8 +76,9 @@ PNP_PROGRAMS: dict[str, PNP] = {
 NO_PNP = {"quebec": "Quebec (selects through its own Arrima system)", "nunavut": "Nunavut"}
 
 
-def pnp_programs_without_bc() -> list[PNP]:
-    """Every PNP except British Columbia, which pathways models with its real SIRS score instead of
-    a program-level stub. Sorted by province for a stable display order."""
+def pnp_programs_eligibility_only() -> list[PNP]:
+    """Every PNP that pathways shows at the program + citation level, i.e. the ones NOT modelled
+    with a real provincial score (BC via SIRS and Saskatchewan via the SINP grid are, so they are
+    excluded here and added by pathways with their own scores). Sorted by province for stable order."""
     return sorted((p for p in PNP_PROGRAMS.values() if not p.modelled_with_score),
                   key=lambda p: p.province)

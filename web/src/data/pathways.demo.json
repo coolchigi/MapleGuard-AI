@@ -2,7 +2,8 @@
   "as_of": "2026-08-22",
   "crs_total": 496,
   "qualifying": [
-    "general"
+    "general",
+    "pnp-saskatchewan"
   ],
   "pathways": [
     {
@@ -247,6 +248,25 @@
       "note": "a provincial nomination adds +600 CRS, the strongest single lever, but it is not something you can grant yourself"
     },
     {
+      "slug": "pnp-saskatchewan",
+      "title": "Saskatchewan Immigrant Nominee Program (SINP)",
+      "rule_kind": "pnp",
+      "eligible": true,
+      "eligibility_reason": "SINP Factor I score 62 of 80 (needs 60 total to submit an EOI); clears the floor on labour-market points alone",
+      "source_url": "https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program/assess-your-eligibility",
+      "source_date": "2026-09-11",
+      "additional_requirements": "Saskatchewan-connection points (family, past SK work/study, or a SK job offer) are not assessed here; invitations select by in-demand occupation through EOI draws",
+      "score_kind": "SINP points",
+      "your_score": 62,
+      "latest_cutoff": null,
+      "latest_draw_date": null,
+      "latest_draw_source": null,
+      "clears": null,
+      "gap": null,
+      "closing_moves": [],
+      "note": "meeting the 60-point floor enters the EOI pool, it is not an invitation; SINP draws select on in-demand occupation and provincial need and can change at any time"
+    },
+    {
       "slug": "pnp-alberta",
       "title": "Alberta Advantage Immigration Program (AAIP)",
       "rule_kind": "pnp",
@@ -385,25 +405,6 @@
       "rule_kind": "pnp",
       "eligible": null,
       "eligibility_reason": "Prince Edward Island nominates through the Prince Edward Island Provincial Nominee Program (PEI PNP). Its streams set their own criteria, so eligibility is checked on the province's site, not decided here",
-      "source_url": "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/provincial-nominees/works.html",
-      "source_date": "2026-09-11",
-      "additional_requirements": "each stream has its own eligibility rules and intake",
-      "score_kind": "none",
-      "your_score": null,
-      "latest_cutoff": null,
-      "latest_draw_date": null,
-      "latest_draw_source": null,
-      "clears": null,
-      "gap": null,
-      "closing_moves": [],
-      "note": "a nomination through an enhanced (Express Entry-aligned) stream adds +600 CRS, effectively guaranteeing an invitation"
-    },
-    {
-      "slug": "pnp-saskatchewan",
-      "title": "Saskatchewan Immigrant Nominee Program (SINP)",
-      "rule_kind": "pnp",
-      "eligible": null,
-      "eligibility_reason": "Saskatchewan nominates through the Saskatchewan Immigrant Nominee Program (SINP). Its streams set their own criteria, so eligibility is checked on the province's site, not decided here",
       "source_url": "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/provincial-nominees/works.html",
       "source_date": "2026-09-11",
       "additional_requirements": "each stream has its own eligibility rules and intake",

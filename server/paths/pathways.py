@@ -33,7 +33,7 @@ from datetime import date
 from typing import Optional
 
 from crs import Profile, crs
-from pnp import BCJobOffer, sirs_bc
+from pnp import BCJobOffer, sinp_points, sirs_bc
 
 from .reach import Draw, closing_moves
 
@@ -219,12 +219,34 @@ def eligible_pathways(profile: Profile, draws: Optional[list] = None,
               "single lever, but it is not something you can grant yourself"),
     ))
 
-    # 4. Every other nominating province/territory, cited. Their streams have their own criteria we
+    # 4. Saskatchewan (SINP): a real computed score from the official SINP points grid, like BC.
+    # We score Factor I (education, work, language, age); the Saskatchewan-connection points and the
+    # occupation-demand-driven draws are not modelled, so meeting the 60 floor is entry to the pool,
+    # never an invitation. `eligible` is True only when Factor I alone clears 60, else None.
+    sinp = sinp_points(profile, as_of=day)
+    pathways.append(PathwayStanding(
+        slug="pnp-saskatchewan", title="Saskatchewan Immigrant Nominee Program (SINP)",
+        rule_kind="pnp", eligible=sinp.meets_points_floor,
+        eligibility_reason=(f"SINP Factor I score {sinp.factor_one} of {sinp.factor_one_max} "
+                            f"(needs {sinp.minimum} total to submit an EOI)"
+                            + ("; clears the floor on labour-market points alone"
+                               if sinp.meets_points_floor
+                               else "; a Saskatchewan connection could still reach the floor")),
+        source_url=sinp.source_url, source_date=sinp.source_date.isoformat(),
+        additional_requirements=("Saskatchewan-connection points (family, past SK work/study, or a "
+                                 "SK job offer) are not assessed here; invitations select by "
+                                 "in-demand occupation through EOI draws"),
+        score_kind="SINP points", your_score=sinp.factor_one,
+        note=("meeting the 60-point floor enters the EOI pool, it is not an invitation; SINP draws "
+              "select on in-demand occupation and provincial need and can change at any time"),
+    ))
+
+    # 5. Every other nominating province/territory, cited. Their streams have their own criteria we
     # do not model here, so eligibility is honestly undecided (None), but the one federal fact we
     # can state deterministically is the +600 CRS an enhanced (Express Entry-aligned) nomination
     # adds. This covers the whole country instead of BC alone, without inventing a verdict.
-    from ingest.provinces import EE_NOMINATION_CRS_BONUS, pnp_programs_without_bc
-    for pnp in pnp_programs_without_bc():
+    from ingest.provinces import EE_NOMINATION_CRS_BONUS, pnp_programs_eligibility_only
+    for pnp in pnp_programs_eligibility_only():
         pathways.append(PathwayStanding(
             slug=f"pnp-{pnp.slug}", title=pnp.program, rule_kind="pnp",
             eligible=None,

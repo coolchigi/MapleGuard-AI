@@ -5,6 +5,12 @@ from .bc import (
     SirsResult,
     sirs_bc,
 )
+from .saskatchewan import (
+    SINP_MIN_POINTS,
+    SINP_SOURCE_URL,
+    SinpStanding,
+    sinp_points,
+)
 from .sirs_ingest import (
     BC_PNP_SIRS_URL,
     BandReconciliation,
@@ -26,6 +32,10 @@ __all__ = [
     "SirsResult",
     "SirsLine",
     "PROVINCIAL_NOMINATION_CRS_BONUS",
+    "sinp_points",
+    "SinpStanding",
+    "SINP_MIN_POINTS",
+    "SINP_SOURCE_URL",
     "BC_PNP_SIRS_URL",
     "SirsGridCitation",
     "SirsBandRecord",
