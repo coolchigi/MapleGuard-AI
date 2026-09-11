@@ -104,18 +104,28 @@ def build_document_auditor(model: Any = None, matcher: Any = None, corrector: An
 
 
 def build_advisor_team(model: Any = None, matcher: Any = None, corrector: Any = None,
+                       corpus: Any = None, classifier: Any = None, memory: Any = None,
+                       session_manager: Any = None, trace_attributes: Any = None,
                        model_factory: Optional[Callable[[], Any]] = None):
     """Build the advisor orchestrator over the two specialists (agent-as-tool topology).
 
     The specialists are exposed with the SDK's native `Agent.as_tool()`, so the advisor's
     tool list is exactly two agent-tools (strategist, document_auditor). Every layer carries
-    the same never-submit / never-assert gates. This is the optional split; the flat
-    `orchestrator.build_orchestrator` remains the default.
+    the same never-submit / never-assert gates. This is the deployed topology (see
+    `runtime.build_app`); the flat `orchestrator.build_orchestrator` stays for direct/offline use.
+
+    Accepts the same deploy pieces as `build_orchestrator` so the runtime can wire it identically:
+    the caller-facing advisor carries the session manager, retrieval memory, and trace attributes,
+    and the deterministic/NOC tool deps (matcher, corrector, cited corpus, policy classifier) are
+    wired module-globally for the specialists' tools.
 
     Args:
         model: A shared Strands model for all three agents (deploy path). None lets
             Strands/AgentCore supply the default at deploy.
-        matcher / corrector: model-backed NOC clients (inject fakes offline).
+        matcher / corrector / corpus / classifier: model-backed NOC clients + cited corpus + the
+            policy classifier for the specialists' tools (inject fakes offline).
+        memory: retrieval MemoryManager for the advisor. session_manager: per-caller persistence.
+        trace_attributes: dict stamped on the advisor's OpenTelemetry spans.
         model_factory: If given, each agent is built from a fresh `model_factory()` instead
             of sharing `model` (needed for stateful fake models in tests).
 
@@ -127,10 +137,23 @@ def build_advisor_team(model: Any = None, matcher: Any = None, corrector: Any = 
     strategist = build_strategist(model=model, model_factory=model_factory)
     auditor = build_document_auditor(model=model, matcher=matcher, corrector=corrector,
                                      model_factory=model_factory)
+    # Wire ALL tool deps LAST: the specialists' own configure_deps calls above set only
+    # matcher/corrector, so re-run it here with corpus + classifier too. Tools read these deps
+    # lazily at call time, so this final wiring is what the specialists actually use.
+    configure_deps(matcher=matcher, corrector=corrector, corpus=corpus, classifier=classifier)
+
+    kwargs: dict[str, Any] = {}
+    if memory is not None:
+        kwargs["memory_manager"] = memory
+    if session_manager is not None:
+        kwargs["session_manager"] = session_manager
+    if trace_attributes is not None:
+        kwargs["trace_attributes"] = trace_attributes
     return Agent(
         name="mapleguard_advisor",
         model=_resolve_model(model, model_factory),
         system_prompt=ADVISOR_PROMPT,
         tools=[strategist.as_tool(), auditor.as_tool()],
         hooks=[make_policy_gate()],
+        **kwargs,
     )
