@@ -1,79 +1,64 @@
 "use client";
 
 /**
- * The dashboard shell: PROFILE collects the inputs; POSITION and TIME MACHINE render the
- * `/dashboard` document the Python engine returned; PATHWAYS renders the `/pathways` document
- * (what the candidate qualifies for). One submit computes both, for the same profile, so the tabs
- * can never disagree about who is on screen.
+ * The shell for the three-view design: DASHBOARD (the agent's read of the case, and the front
+ * door), PROFILE (the inputs + the watch), TIME MACHINE (the score over the next years). The
+ * monitor is not a tab you go find — its status rides the top of the dashboard, and the agentic
+ * read of the case is the whole dashboard.
  *
- * On a successful compute the view moves to POSITION: the user asked a question by submitting, and
- * the answer is on another tab, so leaving them on the form would hide the result. A failure keeps
- * them on the form, where the reason is.
+ * One compute serves every view. POSITION and PATHWAYS come from two independent requests; the
+ * consistency guard renders live numbers only when BOTH landed live, else both from their demo
+ * documents, so the screen never mixes two candidates.
  */
 import React, { useCallback, useState } from "react";
 
-import { AlertsPanel } from "@/components/AlertsPanel";
-import { PathwaysPanel } from "@/components/PathwaysPanel";
-import { PositionPanel } from "@/components/PositionPanel";
-import { ProfileForm } from "@/components/ProfileForm";
-import { SourceBar } from "@/components/SourceBar";
+import { BriefView } from "@/components/BriefView";
+import { Dashboard } from "@/components/Dashboard";
+import { ProfilePage } from "@/components/ProfilePage";
 import { TimeMachine } from "@/components/TimeMachine";
-import type { Profile } from "@/data/types";
+import type { BriefLetterAudit, Profile } from "@/data/types";
 import { DEMO_DATA, useDashboard } from "@/hooks/useDashboard";
 import { PATHWAYS_DEMO, usePathways } from "@/hooks/usePathways";
 import { useWatchCase } from "@/hooks/useWatchCase";
 import { DEFAULT_PROFILE } from "@/lib/profile";
 
-type Tab = "profile" | "position" | "pathways" | "time" | "alerts";
+type Tab = "dashboard" | "profile" | "time";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "dashboard", label: "DASHBOARD" },
   { id: "profile", label: "PROFILE" },
-  { id: "position", label: "POSITION" },
-  { id: "pathways", label: "PATHWAYS" },
   { id: "time", label: "TIME MACHINE" },
-  { id: "alerts", label: "ALERTS" },
 ];
 
 export default function Page() {
-  const [tab, setTab] = useState<Tab>("profile");
+  const [tab, setTab] = useState<Tab>("dashboard");
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
-  const { data, source, loading, error, compute, reset, computedFor } = useDashboard();
+  const [briefOpen, setBriefOpen] = useState(false);
+  // The reference-letter audit, lifted out of the brief flow so the dashboard's officer's-test
+  // block shows the real coverage once the letter has been read (never a fabricated number).
+  const [letterAudit, setLetterAudit] = useState<BriefLetterAudit | null>(null);
+  const { data, source, loading, error, compute } = useDashboard();
   const pathways = usePathways();
   const watchCase = useWatchCase();
 
+  // Submitting the profile computes the position AND, when that lands live, starts the watch.
   const submit = useCallback(
     async (submitted: Profile) => {
       setProfile(submitted);
-      // Both documents describe the same candidate. Compute them together and wait for both, so the
-      // screen advances only once each one's outcome (live vs fell-back) is known.
       const [ok] = await Promise.all([compute(submitted), pathways.compute(submitted)]);
-      if (ok) setTab("position");
+      if (ok) await watchCase.watch(submitted);
+      setTab("dashboard");
     },
-    [compute, pathways],
+    [compute, pathways, watchCase],
   );
 
-  // A rejected profile is the form's problem to show; an unreachable server is the whole app's,
-  // so it stays in the source bar on every tab.
   const rejection = error && !error.isFallbackAppropriate ? error.message : null;
 
-  // Consistency guard (do not remove in the dashboard revamp): POSITION and PATHWAYS come from two
-  // independent requests, each of which falls back to its OWN demo document on failure. If only one
-  // went live we would render live numbers beside demo numbers, two different candidates on screen,
-  // which is the one thing this app must never do. So show live ONLY when BOTH are live; otherwise
-  // render both from their demo documents (built from the same profile, so they agree) and label
-  // the source bar honestly.
+  // Consistency guard: show live numbers only when BOTH requests went live; otherwise render both
+  // from their own demo documents (same profile, so they agree). Never live beside demo.
   const jointlyLive = source === "live" && pathways.source === "live";
-  const jointSource = jointlyLive
-    ? "live"
-    : source === "demo" && pathways.source === "demo"
-      ? "demo"
-      : "fallback";
   const positionData = jointlyLive ? data : DEMO_DATA;
   const pathwaysData = jointlyLive ? pathways.data : PATHWAYS_DEMO;
-  const retry = () => {
-    void compute(profile);
-    void pathways.compute(profile);
-  };
 
   return (
     <main className="stage">
@@ -88,8 +73,8 @@ export default function Page() {
           <button
             key={t.id}
             className="tab"
-            data-active={tab === t.id}
-            onClick={() => setTab(t.id)}
+            data-active={tab === t.id && !briefOpen}
+            onClick={() => { setBriefOpen(false); setTab(t.id); }}
             aria-current={tab === t.id ? "page" : undefined}
           >
             {t.label}
@@ -97,41 +82,38 @@ export default function Page() {
         ))}
       </nav>
 
-      <div className="mg-statusrow">
-        <SourceBar
-          source={jointSource}
-          loading={loading}
-          error={error}
-          asOfHuman={positionData.asOfHuman}
-          onRetry={retry}
+      {briefOpen ? (
+        <BriefView
+          profile={profile}
+          onClose={() => setBriefOpen(false)}
+          onAudit={setLetterAudit}
         />
-      </div>
-
-      {tab === "profile" && (
-        <ProfileForm
-          initialProfile={profile}
-          onSubmit={submit}
-          onReset={reset}
-          loading={loading}
-          serverError={rejection}
-        />
-      )}
-      {tab === "position" && <PositionPanel data={positionData} />}
-      {tab === "pathways" && <PathwaysPanel data={pathwaysData} />}
-      {tab === "time" && <TimeMachine data={positionData} />}
-      {tab === "alerts" && (
-        <AlertsPanel
-          profileId={watchCase.profileId}
-          watched={watchCase.watched}
-          saving={watchCase.saving}
-          saveError={watchCase.saveError}
-          alerts={watchCase.alerts}
-          alertsLoading={watchCase.alertsLoading}
-          alertsError={watchCase.alertsError}
-          onWatch={() => void watchCase.watch(profile)}
-          onRefresh={() => void watchCase.refreshAlerts()}
-          canWatch={computedFor !== null}
-        />
+      ) : (
+        <>
+          {tab === "dashboard" && (
+            <Dashboard
+              data={positionData}
+              pathways={pathwaysData}
+              profile={profile}
+              watched={watchCase.watched}
+              alerts={watchCase.alerts}
+              letterAudit={letterAudit}
+              onDraftFix={() => setBriefOpen(true)}
+            />
+          )}
+          {tab === "profile" && (
+            <ProfilePage
+              initialProfile={profile}
+              onSubmit={submit}
+              loading={loading || watchCase.saving}
+              serverError={rejection}
+              watched={watchCase.watched}
+              benchmarkCutoff={positionData.lastDraw.available ? positionData.lastDraw.score : null}
+              benchmarkName={positionData.lastDraw.name ?? null}
+            />
+          )}
+          {tab === "time" && <TimeMachine data={positionData} />}
+        </>
       )}
     </main>
   );

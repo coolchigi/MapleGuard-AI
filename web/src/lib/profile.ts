@@ -12,7 +12,43 @@ import type {
   LanguageScores,
   MaritalStatus,
   Profile,
+  Province,
 } from "@/data/types";
+
+/** The provinces, each labelled, plus the two special cases. Order: the big-intake provinces
+ *  first. The value is what the profile stores and what maps to a PNP slug below. */
+export const PROVINCE_OPTIONS: { value: Province; label: string }[] = [
+  { value: "ontario", label: "Ontario" },
+  { value: "british-columbia", label: "British Columbia" },
+  { value: "alberta", label: "Alberta" },
+  { value: "saskatchewan", label: "Saskatchewan" },
+  { value: "manitoba", label: "Manitoba" },
+  { value: "nova-scotia", label: "Nova Scotia" },
+  { value: "new-brunswick", label: "New Brunswick" },
+  { value: "newfoundland-labrador", label: "Newfoundland and Labrador" },
+  { value: "prince-edward-island", label: "Prince Edward Island" },
+  { value: "northwest-territories", label: "Northwest Territories" },
+  { value: "yukon", label: "Yukon" },
+  { value: "quebec", label: "Quebec (runs its own selection)" },
+  { value: "undecided", label: "Not decided yet" },
+];
+
+/** Maps a settlement province to its Provincial Nominee Program's pathway slug (the slugs the
+ *  /pathways engine returns). Quebec (own system) and "undecided" have no PNP slug, so no
+ *  provincial pathway is surfaced for them. */
+export const PROVINCE_TO_PNP_SLUG: Partial<Record<Province, string>> = {
+  ontario: "pnp-ontario",
+  "british-columbia": "bc-pnp",
+  alberta: "pnp-alberta",
+  saskatchewan: "pnp-saskatchewan",
+  manitoba: "pnp-manitoba",
+  "nova-scotia": "pnp-nova-scotia",
+  "new-brunswick": "pnp-new-brunswick",
+  "newfoundland-labrador": "pnp-newfoundland-labrador",
+  "prince-edward-island": "pnp-prince-edward-island",
+  "northwest-territories": "pnp-northwest-territories",
+  yukon: "pnp-yukon",
+};
 
 export const EDUCATION_OPTIONS: { value: EducationLevel; label: string }[] = [
   { value: "none-or-less-than-secondary", label: "Less than secondary school" },
@@ -63,6 +99,8 @@ export const DEFAULT_PROFILE: Profile = {
   first_language: evenLanguage(9),
   date_of_birth: "1994-11-03",
   marital_status: "single",
+  province: "ontario",
+  noc_code: null,
 
   spouse_accompanying: false,
   spouse_is_pr_or_citizen: false,

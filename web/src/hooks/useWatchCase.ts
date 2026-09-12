@@ -21,14 +21,12 @@ export type UseWatchCase = {
 };
 
 export function useWatchCase(): UseWatchCase {
-  const [profileId, setProfileId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem(STORAGE_KEY);
-  });
-  const [watched, setWatched] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(STORAGE_KEY) !== null;
-  });
+  // Initialize to the server-render values (nothing watched). Reading localStorage here would make
+  // the first client render disagree with the SSR HTML for any returning user (server: not watched,
+  // client: watched) — a hydration mismatch. So the saved id is read in a mount effect below, after
+  // hydration, and the watched state flips then.
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [watched, setWatched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -55,9 +53,22 @@ export function useWatchCase(): UseWatchCase {
     }
   }, []);
 
+  // After hydration, restore the saved profile from localStorage and load its alerts. Running this
+  // in an effect (not the initial render) is what keeps SSR and the first client render identical.
   useEffect(() => {
-    if (profileIdRef.current) void refreshAlerts();
-  }, []); // only on mount
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(STORAGE_KEY);
+    } catch {
+      stored = null; // storage can throw (private mode, blocked) — degrade to not-watched
+    }
+    if (stored) {
+      profileIdRef.current = stored;
+      setProfileId(stored);
+      setWatched(true);
+      void refreshAlerts();
+    }
+  }, [refreshAlerts]); // once, after mount
 
   const watch = useCallback(async (profile: Profile) => {
     setSaving(true);

@@ -8,7 +8,15 @@
  * Base URL comes from `NEXT_PUBLIC_API_BASE_URL` (see `.env.local.example`); it must be inlined
  * at build time, so it is read as a whole property access rather than destructured off `env`.
  */
-import type { Alert, DashboardData, DashboardRequest, PathwaysData, Profile } from "@/data/types";
+import type {
+  Alert,
+  BriefData,
+  DashboardData,
+  DashboardRequest,
+  DrawsFeed,
+  PathwaysData,
+  Profile,
+} from "@/data/types";
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
@@ -256,6 +264,54 @@ export async function fetchAlerts(
     throw new ApiError("malformed", "the API answered, but not with an alerts feed");
   }
   return feed.alerts;
+}
+
+/** The live cited draws feed (`GET /draws`), used to rank the brief's next moves against real
+ *  rounds. Best-effort for the brief: a caller may proceed without it (the brief simply omits the
+ *  ranked-moves block) rather than block the whole document on the rounds feed being reachable. */
+export async function fetchDraws(
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<DrawsFeed> {
+  const feed = await getJson<DrawsFeed>("/draws", options);
+  if (!feed || !Array.isArray(feed.draws)) {
+    throw new ApiError("malformed", "the API answered, but not with a draws feed");
+  }
+  return feed;
+}
+
+/**
+ * The consultant brief for one candidate (`POST /brief`): CRS position, dated cliffs, ranked next
+ * moves, and — when a reference letter and its claimed NOC code are supplied — the cited letter
+ * audit plus a corrected-letter draft. Every number and citation is computed by the Python core;
+ * only the cover prose is model-written and is screened before it is returned.
+ *
+ * `draws` (from `fetchDraws`) is what lets the server rank the next moves; omit it and that block
+ * is simply empty. Throws `ApiError` (a rejected profile is a real 4xx, not a reason to fall back).
+ */
+export async function fetchBrief(
+  request: {
+    profile: Profile;
+    noc_code?: string;
+    letter_text?: string;
+    draws?: unknown[];
+    supporting_facts?: string[];
+    as_of?: string;
+  },
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<BriefData> {
+  const data = await postJson<unknown>("/brief", request, {
+    ...options,
+    // The brief may audit a letter and synthesize prose, both slower than a bare compute.
+    timeoutMs: options.timeoutMs ?? 20000,
+  });
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    typeof (data as BriefData).crs?.total !== "number"
+  ) {
+    throw new ApiError("malformed", "the API answered, but not with a consultant brief");
+  }
+  return data as BriefData;
 }
 
 export type HealthResponse = {
