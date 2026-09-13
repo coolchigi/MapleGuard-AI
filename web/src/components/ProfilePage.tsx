@@ -12,7 +12,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import type { EducationLevel, MaritalStatus, Profile, Province } from "@/data/types";
+import type { EducationLevel, LanguageAbility, LanguageScores, MaritalStatus, Profile, Province } from "@/data/types";
 import { fetchPosition } from "@/lib/api";
 import {
   EDUCATION_OPTIONS,
@@ -24,7 +24,6 @@ import {
   toRequestProfile,
 } from "@/lib/profile";
 
-const CLB_ALL = [4, 5, 6, 7, 8, 9, 10];
 const YEARS = [0, 1, 2, 3, 4, 5];
 
 /** A compact pill control: the label on the left, a bordered mono control on the right, on a
@@ -61,6 +60,36 @@ function Sel<T extends string | number>({ value, options, onChange }: {
 }
 
 const YESNO = [{ value: "no", label: "no" }, { value: "yes", label: "yes" }];
+
+const CLB_OPTS = [0, 4, 5, 6, 7, 8, 9, 10];
+const ABILITIES: { key: LanguageAbility; short: string }[] = [
+  { key: "speaking", short: "SPK" },
+  { key: "listening", short: "LSN" },
+  { key: "reading", short: "RDG" },
+  { key: "writing", short: "WRT" },
+];
+
+/** Per-ability language input. The CRS scores each ability separately (the minimum drives the
+ *  band), so a single "CLB all" control undercounts anyone with uneven scores. Four selects keep it
+ *  accurate. */
+function LangGrid({ value, onChange }: { value: LanguageScores; onChange: (v: LanguageScores) => void }) {
+  return (
+    <div className="prof-lang">
+      {ABILITIES.map(({ key, short }) => (
+        <label key={key} className="prof-lang-cell">
+          <span className="prof-lang-short">{short}</span>
+          <select
+            className="prof-ctl prof-lang-ctl"
+            value={value[key]}
+            onChange={(e) => onChange({ ...value, [key]: Number(e.target.value) })}
+          >
+            {CLB_OPTS.map((n) => <option key={n} value={n}>{n === 0 ? "—" : n}</option>)}
+          </select>
+        </label>
+      ))}
+    </div>
+  );
+}
 
 type Scenario = {
   key: string;
@@ -119,14 +148,6 @@ export function ProfilePage({ initialProfile, onSubmit, loading, serverError, wa
 
   const age = ageOn(profile.date_of_birth);
   const expiry = testExpiryOf(profile);
-  const minClb = Math.min(
-    profile.first_language.speaking, profile.first_language.listening,
-    profile.first_language.reading, profile.first_language.writing,
-  );
-  const frenchClb = profile.second_language
-    ? Math.min(profile.second_language.speaking, profile.second_language.listening,
-      profile.second_language.reading, profile.second_language.writing)
-    : 0;
 
   const shortName = (benchmarkName ?? "the last draw").replace("Canadian Experience Class", "CEC");
 
@@ -230,23 +251,25 @@ export function ProfilePage({ initialProfile, onSubmit, loading, serverError, wa
 
           <div>
             <div className="prof-kick">LANGUAGE</div>
-            <Row label="First official language">
-              <Sel<number> value={minClb} options={CLB_ALL.map((n) => ({ value: n, label: `CLB ${n} (all)` }))} onChange={(v) => set("first_language", evenLanguage(v))} />
-            </Row>
+            <div className="prof-langblock">
+              <div className="prof-lang-head">First official language <span>CLB per ability</span></div>
+              <LangGrid value={profile.first_language} onChange={(v) => set("first_language", v)} />
+            </div>
             <Row label="Test taken" hint={expiry ? `lapses ${expiry}` : undefined}>
               <input className="prof-ctl" type="date" value={profile.first_language_test_date ?? ""}
                 onChange={(e) => set("first_language_test_date", e.target.value || null)} />
             </Row>
-            <Row label="Second language (French)">
-              <Sel<number>
-                value={frenchClb}
-                options={[{ value: 0, label: "none" }, ...[7, 8, 9, 10].map((n) => ({ value: n, label: `NCLC ${n} (all)` }))]}
+            <div className="prof-langblock">
+              <div className="prof-lang-head">Second language (French) <span>NCLC per ability, optional</span></div>
+              <LangGrid
+                value={profile.second_language ?? evenLanguage(0)}
                 onChange={(v) => {
-                  if (v === 0) { set("second_language", null); set("second_language_is_french", false); }
-                  else { set("second_language", evenLanguage(v)); set("second_language_is_french", true); }
+                  const any = v.speaking || v.listening || v.reading || v.writing;
+                  if (any) { set("second_language", v); set("second_language_is_french", true); }
+                  else { set("second_language", null); set("second_language_is_french", false); }
                 }}
               />
-            </Row>
+            </div>
 
             <div className="prof-kick prof-kick-mt">ADDITIONAL</div>
             <Row label="Provincial nomination">
