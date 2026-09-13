@@ -18,6 +18,7 @@ import React, { useCallback, useState } from "react";
 
 import type { BriefData, BriefLetterAudit, DrawRecord, Profile } from "@/data/types";
 import { ApiError, fetchBrief, fetchDraws } from "@/lib/api";
+import { extractPdfText } from "@/lib/pdf";
 import { toRequestProfile } from "@/lib/profile";
 import { Cite } from "./atoms";
 
@@ -227,6 +228,35 @@ export function BriefView({ profile, onClose, onAudit }: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BriefData | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+
+  // Read a dropped/picked PDF into the letter box, in the browser. The file itself never leaves the
+  // device: only the extracted text is sent, exactly as if it had been pasted. The user sees the
+  // extracted text and can fix it before generating.
+  const onPickPdf = useCallback(async (file: File | undefined) => {
+    if (!file) return;
+    setExtractError(null);
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setExtractError("That is not a PDF. Upload a PDF, or paste the text below.");
+      return;
+    }
+    setExtracting(true);
+    setFileName(file.name);
+    try {
+      const text = await extractPdfText(file);
+      if (!text) {
+        setExtractError("No text found in that PDF (a scan or image needs OCR). Paste the text below instead.");
+      } else {
+        setLetterText(text);
+      }
+    } catch {
+      setExtractError("Could not read that PDF. Paste the text below instead.");
+    } finally {
+      setExtracting(false);
+    }
+  }, []);
 
   const generate = useCallback(async () => {
     setLoading(true);
@@ -287,13 +317,32 @@ export function BriefView({ profile, onClose, onAudit }: {
             value={nocCode}
             onChange={(e) => setNocCode(e.target.value)}
           />
-          <label className="brief-input-label" htmlFor="brief-letter">
+          <label className="brief-input-label" htmlFor="brief-pdf">
             Employer reference letter (optional)
           </label>
+          <label
+            className="brief-drop"
+            htmlFor="brief-pdf"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); void onPickPdf(e.dataTransfer.files?.[0]); }}
+          >
+            <input
+              id="brief-pdf"
+              type="file"
+              accept="application/pdf,.pdf"
+              hidden
+              onChange={(e) => void onPickPdf(e.target.files?.[0] ?? undefined)}
+            />
+            <span className="brief-drop-main">
+              {extracting ? "Reading the PDF…" : fileName ? `Read ${fileName}` : "Drop a PDF here, or click to upload"}
+            </span>
+            <span className="brief-drop-sub">The file stays in your browser. Only the text is sent, and the server redacts PII before storing it.</span>
+          </label>
+          {extractError && <div className="mg-form-notice" role="alert">{extractError}</div>}
           <textarea
             id="brief-letter"
             className="mg-input brief-letter-input"
-            placeholder="Paste the reference letter text to audit it against the cited NOC duties and draft a corrected version."
+            placeholder="Or paste the reference letter text to audit it against the cited NOC duties and draft a corrected version."
             value={letterText}
             onChange={(e) => setLetterText(e.target.value)}
             rows={5}
