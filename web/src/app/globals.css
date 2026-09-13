@@ -730,3 +730,14 @@ a:hover { color: var(--maple-dark); }
 .prof-scen-total[data-up="true"] { color: var(--maple); }
 .prof-scen-tag { font-family: var(--mono); font-size: 10px; color: var(--muted-2); margin-top: 4px; }
 .prof-scen-card[data-active="true"] .prof-scen-tag { color: var(--maple); }
+
+/* reference-letter PDF upload (client-side extraction) */
+.mg-form-notice { font-family: var(--serif); font-size: 15px; color: var(--maple-dark); margin: 8px 0; }
+.brief-drop {
+  display: flex; flex-direction: column; gap: 4px; cursor: pointer;
+  border: 1.5px dashed var(--muted-3); border-radius: 8px; padding: 16px 18px;
+  background: var(--panel); transition: border-color 0.15s, background 0.15s;
+}
+.brief-drop:hover { border-color: var(--maple); background: var(--wash); }
+.brief-drop-main { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); letter-spacing: 0.02em; }
+.brief-drop-sub { font-family: var(--serif); font-size: 12.5px; color: var(--muted); }
