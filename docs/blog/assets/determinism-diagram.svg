@@ -1,0 +1,35 @@
+<svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <marker id="dn" markerWidth="9" markerHeight="9" refX="4.5" refY="7" orient="auto">
+      <path d="M0 0 L4.5 7 L9 0 Z" fill="#8A8069"/>
+    </marker>
+    <marker id="up" markerWidth="9" markerHeight="9" refX="4.5" refY="2" orient="auto">
+      <path d="M0 9 L4.5 2 L9 9 Z" fill="#3F7A3F"/>
+    </marker>
+  </defs>
+
+  <rect width="600" height="400" fill="#F7F5F0"/>
+  <text x="60" y="48" font-size="22" font-weight="800" fill="#14110D" letter-spacing="-0.3">Determinism below the model</text>
+
+  <!-- the model -->
+  <rect x="150" y="78" width="390" height="72" rx="12" fill="#14110D"/>
+  <text x="172" y="108" font-size="14" font-weight="800" fill="#F7F5F0">THE MODEL</text>
+  <text x="172" y="130" font-size="12.5" fill="#C9C2B2">Picks a tool, explains the answer. Computes nothing.</text>
+
+  <!-- gates -->
+  <rect x="150" y="164" width="390" height="40" rx="10" fill="#FBEDEB" stroke="#C0362C" stroke-width="1.5"/>
+  <text x="172" y="189" font-size="12.5" font-weight="700" fill="#C0362C">GATES  ·  never submit  ·  never assert eligibility</text>
+
+  <!-- the core -->
+  <rect x="150" y="218" width="390" height="72" rx="12" fill="#EFEAdd" stroke="#14110D" stroke-width="1.5"/>
+  <text x="172" y="248" font-size="14" font-weight="800" fill="#14110D">DETERMINISTIC CORE</text>
+  <text x="172" y="270" font-size="12.5" fill="#3A342A">Pure Python. Every number cited to canada.ca.</text>
+
+  <!-- flow arrows on the left -->
+  <path d="M100 96 V272" fill="none" stroke="#8A8069" stroke-width="1.8" marker-end="url(#dn)"/>
+  <path d="M124 272 V96" fill="none" stroke="#3F7A3F" stroke-width="1.8" marker-end="url(#up)"/>
+  <text x="70" y="188" font-size="11" fill="#8A8069" text-anchor="middle" transform="rotate(-90 70 188)">calls a tool</text>
+  <text x="140" y="188" font-size="11" fill="#3F7A3F" text-anchor="middle" transform="rotate(-90 140 188)">cited number back</text>
+
+  <text x="60" y="330" font-size="12.5" fill="#6E6656">The model reasons and writes. The code below it holds the truth.</text>
+</svg>
