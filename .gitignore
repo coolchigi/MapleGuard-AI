@@ -13,6 +13,7 @@ venv/
 # Local agent worktrees / session state
 .claude/
 
-docs/blog/
+# WIP blog drafts stay local, but their visual assets are versioned.
+docs/blog/*.md
 
 .env
